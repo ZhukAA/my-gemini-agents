@@ -8,11 +8,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Marked.js для рендеринга Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Highlight.js для подсветки кода -->
+  <!-- Highlight.js и SheetJS грузим асинхронно (defer) для быстрого старта на мобильном -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- SheetJS для чтения Excel (.xlsx / .xls) прямо в браузере -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     .app-height { height: 100vh; height: 100dvh; }
     .prose pre { background: #1e293b; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 0.85em; }
@@ -363,6 +362,11 @@
             data: base64Data
           };
         } else if (ext === 'xlsx' || ext === 'xls') {
+          if (typeof XLSX === 'undefined') {
+            alert('Библиотека Excel ещё загружается, попробуйте через пару секунд.');
+            clearPendingAttachment();
+            return;
+          }
           attachmentIcon.textContent = '📊';
           const arrayBuffer = await file.arrayBuffer();
           const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -403,12 +407,15 @@
       });
     }
 
-    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (WORD .DOC, .TXT, .CSV И ДР.) ---
+    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (ANDROID WEBVIEW + DESKTOP) ---
     window.downloadGeneratedFile = async function(filename, content, mimeType = 'text/plain;charset=utf-8') {
-      try {
-        if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-          const blob = new Blob([content], { type: mimeType });
-          const file = new File([blob], filename, { type: mimeType });
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.Capacitor && window.Capacitor.isNativePlatform());
+
+      // 1. Для Android/Mobile используем системное меню "Поделиться"
+      if (isMobile && navigator.share) {
+        try {
+          const cleanMime = mimeType.split(';')[0];
+          const file = new File([content], filename, { type: cleanMime });
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
@@ -416,20 +423,47 @@
             });
             return;
           }
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          console.warn('File share failed, trying text/data fallback:', err);
         }
-      } catch (err) {
-        console.warn('Native share fallback to blob:', err);
+
+        // Если Android WebView не разрешил шаринг File-объекта, шарим как текст
+        if (!filename.endsWith('.doc')) {
+          try {
+            await navigator.share({
+              title: filename,
+              text: content
+            });
+            return;
+          } catch (err) {
+            if (err.name === 'AbortError') return;
+          }
+        }
       }
 
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // 2. Прямое скачивание через Data URL (работает в Android WebView надёжнее, чем blob:)
+      try {
+        const base64 = btoa(unescape(encodeURIComponent(content)));
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (e) {
+        // 3. Резервный вариант через Blob для больших файлов на ПК
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
     };
 
     window.downloadAsWordDoc = function(filename, markdownText) {
@@ -673,7 +707,9 @@
           });
 
           bubble.innerHTML = marked.parse(processedText);
-          bubble.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+          if (typeof hljs !== 'undefined') {
+            bubble.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+          }
           wrapper.appendChild(bubble);
 
           const actionsRow = document.createElement('div');
