@@ -99,7 +99,7 @@
                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-blue-500" />
       </div>
       <div class="flex gap-2">
-        <button id="exportBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 transition">Экспорт JSON</button>
+        <button id="exportBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 transition">📋 Копия JSON</button>
         <label class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 text-center cursor-pointer transition">
           Импорт
           <input type="file" id="importInput" accept=".json" class="hidden" />
@@ -234,7 +234,7 @@
     </div>
 
     <div class="text-[11px] text-slate-500 mt-auto pt-2">
-      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Ответы можно скачивать в Word (.doc) и текст (.txt).
+      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Любой ответ можно скопировать в буфер обмена или отправить через системное меню «Поделиться».
     </div>
   </aside>
 
@@ -407,65 +407,62 @@
       });
     }
 
-    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (НАТИВНЫЙ CAPACITOR + БРАУЗЕР ПК) ---
-    window.downloadGeneratedFile = async function(filename, content, mimeType = 'text/plain;charset=utf-8') {
-      // 1. Нативное сохранение и отправка в Android APK через Capacitor Plugins
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share) {
+    // --- КОПИРОВАНИЕ В БУФЕР ОБМЕНА И ОТПРАВКА ЧЕРЕЗ СИСТЕМНОЕ МЕНЮ ПОДЕЛИТЬСЯ ---
+    window.copyTextToClipboard = async function(text, buttonEl) {
+      let copied = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        }
+      } catch (err) {
+        console.warn('Clipboard API fallback:', err);
+      }
+
+      if (!copied) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
         try {
-          const { Filesystem, Share } = window.Capacitor.Plugins;
-          const base64Data = btoa(unescape(encodeURIComponent(content)));
+          copied = document.execCommand('copy');
+        } catch (e) {
+          console.error('execCommand copy failed:', e);
+        }
+        document.body.removeChild(ta);
+      }
 
-          const saved = await Filesystem.writeFile({
-            path: filename,
-            data: base64Data,
-            directory: 'CACHE'
-          });
+      if (copied && buttonEl) {
+        const originalText = buttonEl.textContent;
+        buttonEl.textContent = '✓ Скопировано';
+        buttonEl.classList.add('text-emerald-400', 'border-emerald-500/50');
+        setTimeout(() => {
+          buttonEl.textContent = originalText;
+          buttonEl.classList.remove('text-emerald-400', 'border-emerald-500/50');
+        }, 1800);
+      } else if (!copied) {
+        alert('Не удалось скопировать текст автоматически.');
+      }
+    };
 
-          await Share.share({
-            title: filename,
-            url: saved.uri,
-            dialogTitle: 'Сохранить или отправить файл'
+    window.shareTextNative = async function(title, text, buttonEl) {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: title || 'Gemini Agents',
+            text: text
           });
           return;
         } catch (err) {
-          if (err && String(err.message).toLowerCase().includes('cancel')) return;
-          alert('Ошибка сохранения файла: ' + (err.message || err));
+          if (err && err.name === 'AbortError') return;
+          console.warn('Share failed, falling back to copy:', err);
         }
       }
-
-      // 2. Стандартное скачивание для браузера ПК
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
-
-    window.downloadAsWordDoc = function(filename, markdownText) {
-      const htmlContent = marked.parse(markdownText);
-      const wordHtml = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office'
-              xmlns:w='urn:schemas-microsoft-com:office:word'
-              xmlns='http://www.w3.org/TR/REC-html40'>
-        <head>
-          <meta charset='utf-8'>
-          <title>${escapeHtml(filename)}</title>
-          <style>
-            body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111111; }
-            h1, h2, h3 { color: #1e3a8a; margin-top: 12pt; margin-bottom: 6pt; }
-            table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
-            th, td { border: 1px solid #888888; padding: 6pt 8pt; text-align: left; }
-            th { background-color: #f1f5f9; font-weight: bold; }
-            pre, code { font-family: Consolas, monospace; background-color: #f8fafc; padding: 4pt; }
-          </style>
-        </head>
-        <body>${htmlContent}</body>
-        </html>`;
-      window.downloadGeneratedFile(filename, '\ufeff' + wordHtml, 'application/msword;charset=utf-8');
+      // Если системное окно Поделиться недоступно (например, на ПК), копируем в буфер
+      await window.copyTextToClipboard(text, buttonEl);
     };
 
     // --- АВТОРИЗАЦИЯ ---
@@ -657,12 +654,12 @@
         chatContainer.innerHTML = `
           <div class="m-auto text-center max-w-sm px-4 text-slate-500 text-xs sm:text-sm">
             <p class="mb-1 text-slate-300 font-medium">Чат с агентом «${escapeHtml(agent.name)}»</p>
-            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скачать в Word (.doc) или .txt.</p>
+            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать или отправить через «Поделиться».</p>
           </div>`;
         return;
       }
 
-      agent.history.forEach((msg, msgIndex) => {
+      agent.history.forEach((msg) => {
         const isUser = msg.role === 'user';
         const wrapper = document.createElement('div');
         wrapper.className = `flex flex-col max-w-[90%] sm:max-w-3xl ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
@@ -678,11 +675,9 @@
           bubble.textContent = msg.text;
           wrapper.appendChild(bubble);
         } else {
-          const fileBlocks = [];
+          // Если модель оформила ответ в блок ```file:name ... ```, превращаем его в обычный читаемый блок кода
           const processedText = msg.text.replace(/```file:([^\n]+)\n([\s\S]*?)```/g, (match, fname, fcontent) => {
-            const cleanName = fname.trim();
-            fileBlocks.push({ name: cleanName, content: fcontent });
-            return `\n> 📄 **Сформирован файл:** \`${cleanName}\`\n`;
+            return `\n**${fname.trim()}**\n\`\`\`\n${fcontent.trim()}\n\`\`\`\n`;
           });
 
           bubble.innerHTML = marked.parse(processedText);
@@ -694,38 +689,25 @@
           const actionsRow = document.createElement('div');
           actionsRow.className = 'flex flex-wrap items-center gap-2 mt-1.5 px-1';
 
-          fileBlocks.forEach(fb => {
-            const fileBtn = document.createElement('button');
-            fileBtn.type = 'button';
-            fileBtn.className = 'text-[11px] bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1';
-            fileBtn.innerHTML = `<span>⬇️ Скачать ${escapeHtml(fb.name)}</span>`;
-            fileBtn.onclick = () => {
-              const payload = fb.name.toLowerCase().endsWith('.csv') ? '\ufeff' + fb.content : fb.content;
-              window.downloadGeneratedFile(fb.name, payload);
-            };
-            actionsRow.appendChild(fileBtn);
-          });
-
-          const saveDocBtn = document.createElement('button');
-          saveDocBtn.type = 'button';
-          saveDocBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 px-2.5 py-1 rounded-lg transition';
-          saveDocBtn.textContent = '📄 В Word (.doc)';
-          saveDocBtn.onclick = () => {
-            const stamp = new Date().toISOString().slice(0, 10);
-            window.downloadAsWordDoc(`${agent.name}-${stamp}-${msgIndex + 1}.doc`, msg.text);
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 px-2.5 py-1 rounded-lg transition';
+          copyBtn.textContent = '📋 Скопировать';
+          copyBtn.onclick = () => {
+            const cleanText = bubble.innerText || msg.text;
+            window.copyTextToClipboard(cleanText, copyBtn);
           };
-          actionsRow.appendChild(saveDocBtn);
+          actionsRow.appendChild(copyBtn);
 
-          const saveTxtBtn = document.createElement('button');
-          saveTxtBtn.type = 'button';
-          saveTxtBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 px-2.5 py-1 rounded-lg transition';
-          saveTxtBtn.textContent = '📝 В текст (.txt)';
-          saveTxtBtn.onclick = () => {
-            const stamp = new Date().toISOString().slice(0, 10);
-            const plainText = bubble.innerText || msg.text;
-            window.downloadGeneratedFile(`${agent.name}-${stamp}-${msgIndex + 1}.txt`, '\ufeff' + plainText, 'text/plain;charset=utf-8');
+          const shareBtn = document.createElement('button');
+          shareBtn.type = 'button';
+          shareBtn.className = 'text-[11px] bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition';
+          shareBtn.textContent = '📤 Поделиться';
+          shareBtn.onclick = () => {
+            const cleanText = bubble.innerText || msg.text;
+            window.shareTextNative(agent.name, cleanText, shareBtn);
           };
-          actionsRow.appendChild(saveTxtBtn);
+          actionsRow.appendChild(shareBtn);
 
           wrapper.appendChild(actionsRow);
         }
@@ -814,16 +796,16 @@
           generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
 
-        const fileExportRule = '\n\n[Системное правило вывода файлов]: Если пользователь просит прислать результат файлом (таблицей CSV, JSON, TXT, HTML, SQL или скриптом), оформи содержимое файла в отдельный блок кода с префиксом file:имя_файла.расширение (например: ```file:report.csv\\n...\\n```), чтобы приложение создало кнопку скачивания.';
-        const combinedSystemPrompt = ((agent.systemInstruction || '').trim() + fileExportRule).trim();
-
         const requestBody = {
           contents: contents,
-          generationConfig: generationConfig,
-          systemInstruction: {
-            parts: [{ text: combinedSystemPrompt }]
-          }
+          generationConfig: generationConfig
         };
+
+        if ((agent.systemInstruction || '').trim()) {
+          requestBody.systemInstruction = {
+            parts: [{ text: agent.systemInstruction.trim() }]
+          };
+        }
 
         if (agent.useSearch) {
           requestBody.tools = [{ google_search: {} }];
@@ -1003,13 +985,9 @@
       }
     });
 
-    document.getElementById('exportBtn').addEventListener('click', () => {
+    document.getElementById('exportBtn').addEventListener('click', (e) => {
       const exportData = { ...state, apiKey: '' };
-      window.downloadGeneratedFile(
-        `gemini-agents-backup-${new Date().toISOString().slice(0,10)}.json`,
-        JSON.stringify(exportData, null, 2),
-        'application/json;charset=utf-8'
-      );
+      window.copyTextToClipboard(JSON.stringify(exportData, null, 2), e.currentTarget);
     });
 
     document.getElementById('importInput').addEventListener('change', (e) => {
