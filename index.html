@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
+  <title>Gemini Multi-Agent Studio (Cloud)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Marked.js для рендеринга Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js для подсветки кода -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- SheetJS для чтения Excel (.xlsx / .xls) прямо в браузере -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .app-height { height: 100vh; height: 100dvh; }
+    .prose pre { background: #1e293b; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 0.85em; }
+    .prose code { font-family: monospace; font-size: 0.9em; word-break: break-word; }
+    .prose p { margin-bottom: 0.6em; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose ul { list-style: disc; margin-left: 1.3em; margin-bottom: 0.6em; }
+    .prose ol { list-style: decimal; margin-left: 1.3em; margin-bottom: 0.6em; }
+    .prose table { border-collapse: collapse; width: 100%; margin: 10px 0; display: block; overflow-x: auto; }
+    .prose th, .prose td { border: 1px solid #475569; padding: 6px 8px; text-align: left; }
+    .prose th { background: #334155; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 app-height flex overflow-hidden font-sans relative">
+
+  <!-- ЭКРАН АВТОРИЗАЦИИ -->
+  <div id="authScreen" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4 shadow-2xl">
+      <div class="text-center">
+        <h1 class="text-xl font-bold text-blue-400">Gemini Agents Cloud</h1>
+        <p class="text-xs text-slate-400 mt-1">Войдите для синхронизации чатов, настроек и API-ключа</p>
+      </div>
+
+      <form id="emailLoginForm" class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Email</label>
+          <input type="email" id="loginEmail" required placeholder="you@example.com"
+                 class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Пароль</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••"
+                 class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        </div>
+        <button type="submit" id="emailLoginBtn"
+                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg text-sm transition mt-1">
+          Войти по Email
+        </button>
+      </form>
+
+      <div class="relative flex py-1 items-center">
+        <div class="flex-grow border-t border-slate-800"></div>
+        <span class="flex-shrink mx-3 text-xs text-slate-500">или</span>
+        <div class="flex-grow border-t border-slate-800"></div>
+      </div>
+
+      <button id="googleLoginBtn" type="button"
+              class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 border border-slate-700">
+        <span>Войти через Google</span>
+      </button>
+
+      <p id="authError" class="text-xs text-red-400 text-center hidden"></p>
+    </div>
+  </div>
+
+  <!-- ЗАТЕМНЕНИЕ ФОНА ДЛЯ МОБИЛЬНЫХ ШТОРОК -->
+  <div id="mobileBackdrop" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden"></div>
+
+  <!-- ЛЕВАЯ ПАНЕЛЬ -->
+  <aside id="leftSidebar" class="fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 transform -translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 shrink-0">
+    <div class="flex flex-col gap-3 overflow-hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-blue-400">Gemini Agents</h1>
+          <span id="syncStatus" class="text-[11px] text-emerald-400">● Облако подключено</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button id="addAgentBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-medium transition">
+            + Новый
+          </button>
+          <button id="closeLeftBtn" class="lg:hidden text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <div id="agentsList" class="flex flex-col gap-1.5 overflow-y-auto pr-1"></div>
+    </div>
+
+    <!-- Нижний блок: API Key, Бэкап и Выход -->
+    <div class="border-t border-slate-800 pt-3 flex flex-col gap-2.5 text-xs">
+      <div>
+        <label class="text-slate-400 block mb-1">Gemini API Key (в облаке):</label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." 
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-blue-500" />
+      </div>
+      <div class="flex gap-2">
+        <button id="exportBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 transition">Экспорт JSON</button>
+        <label class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 text-center cursor-pointer transition">
+          Импорт
+          <input type="file" id="importInput" accept=".json" class="hidden" />
+        </label>
+      </div>
+      <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-slate-400">
+        <span id="userEmailLabel" class="truncate max-w-[160px]"></span>
+        <button id="logoutBtn" class="text-red-400 hover:text-red-300 font-medium">Выйти</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ЦЕНТРАЛЬНАЯ ОБЛАСТЬ -->
+  <main class="flex-1 flex flex-col h-full min-w-0 bg-slate-950">
+    <header class="h-14 border-b border-slate-800 px-3 sm:px-5 flex items-center justify-between gap-2 bg-slate-900/70 shrink-0">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <button id="openLeftBtn" class="lg:hidden p-2 -ml-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+
+        <div class="min-w-0">
+          <h2 id="currentAgentTitle" class="font-semibold text-sm sm:text-base text-white truncate">Агент</h2>
+          <p id="currentAgentSubtitle" class="text-[11px] sm:text-xs text-slate-400 truncate">gemini-3.5-flash-lite</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button id="clearChatBtn" class="text-xs bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 px-2.5 py-1.5 rounded-lg transition">
+          <span class="hidden sm:inline">Очистить</span>
+          <span class="sm:hidden">🗑️</span>
+        </button>
+        <button id="toggleSettingsBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+          <span>⚙️</span>
+          <span class="hidden sm:inline">Настройки</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="chatContainer" class="flex-1 overflow-y-auto px-3 py-4 sm:p-6 flex flex-col gap-3 sm:gap-4"></div>
+
+    <!-- НИЖНЯЯ ПАНЕЛЬ ВВОДА С ПРЕВЬЮ ВЛОЖЕНИЙ -->
+    <div class="p-2.5 sm:p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
+      <div class="max-w-4xl mx-auto flex flex-col gap-2">
+        <div id="attachmentPreviewBar" class="hidden items-center justify-between bg-slate-900 border border-blue-500/40 rounded-xl px-3 py-2 text-xs">
+          <div class="flex items-center gap-2 min-w-0">
+            <span id="attachmentIcon" class="text-base">📎</span>
+            <span id="attachmentName" class="text-slate-200 font-medium truncate">file.pdf</span>
+            <span id="attachmentSize" class="text-slate-400 shrink-0"></span>
+          </div>
+          <button type="button" id="removeAttachmentBtn" class="text-slate-400 hover:text-red-400 px-2 py-0.5 font-bold">✕</button>
+        </div>
+
+        <form id="chatForm" class="flex items-end gap-2">
+          <input type="file" id="fileAttachInput" class="hidden"
+                 accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.xlsx,.xls,.py,.js,.sql,.xml" />
+          
+          <button type="button" id="attachBtn" title="Прикрепить фото, PDF, Excel или текст"
+                  class="bg-slate-800 hover:bg-slate-700 text-slate-200 h-10 w-10 rounded-xl transition shrink-0 flex items-center justify-center border border-slate-700">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+          </button>
+
+          <textarea id="messageInput" rows="1" placeholder="Сообщение или вопрос по файлу..."
+                    class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 resize-none max-h-36 overflow-y-auto"></textarea>
+          
+          <button type="submit" id="sendBtn"
+                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium px-3.5 sm:px-5 h-10 rounded-xl transition shrink-0 flex items-center justify-center">
+            <span class="hidden sm:inline text-sm">Отправить</span>
+            <svg class="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <!-- ПРАВАЯ ПАНЕЛЬ -->
+  <aside id="settingsPanel" class="fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-slate-900 border-l border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto transform translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 shrink-0">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+      <h3 class="font-semibold text-sm text-slate-200">Параметры агента</h3>
+      <div class="flex items-center gap-3">
+        <button id="deleteAgentBtn" class="text-xs text-red-400 hover:text-red-300">Удалить</button>
+        <button id="closeRightBtn" class="lg:hidden text-slate-400 hover:text-white p-1 rounded bg-slate-800 text-xs">✕</button>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">Имя агента</label>
+      <input type="text" id="agentNameInput" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm" />
+    </div>
+
+    <div>
+      <div class="flex justify-between items-center mb-1">
+        <label class="text-xs text-slate-400">Модель Gemini</label>
+        <button id="refreshModelsBtn" type="button" class="text-[11px] text-blue-400 hover:underline">Обновить список</button>
+      </div>
+      <select id="agentModelSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm">
+        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+        <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+        <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+        <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
+        <option value="gemini-4-argon">gemini-4-argon</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">Системная инструкция (Роль)</label>
+      <textarea id="agentSystemPrompt" rows="6" placeholder="Опишите роль, правила и формат ответов..."
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs leading-relaxed"></textarea>
+    </div>
+
+    <div>
+      <div class="flex justify-between text-xs text-slate-400 mb-1">
+        <span>Температура (креативность)</span>
+        <span id="tempValue">0.7</span>
+      </div>
+      <input type="range" id="agentTempInput" min="0" max="2" step="0.1" value="0.7" class="w-full accent-blue-500 h-2" />
+    </div>
+
+    <div class="flex items-center justify-between bg-slate-950 p-3 rounded-lg border border-slate-800">
+      <div class="pr-2">
+        <div class="text-xs font-medium text-slate-200">Поиск в Google (Grounding)</div>
+        <div class="text-[11px] text-slate-400">Может требовать платный биллинг API</div>
+      </div>
+      <input type="checkbox" id="agentSearchToggle" class="w-5 h-5 accent-blue-500 shrink-0" />
+    </div>
+
+    <div class="text-[11px] text-slate-500 mt-auto pt-2">
+      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Ответы можно скачивать в Word (.doc) и текст (.txt).
+    </div>
+  </aside>
+
+  <!-- ПОДКЛЮЧЕНИЕ FIREBASE SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { 
+      getAuth, signInWithEmailAndPassword, GoogleAuthProvider, 
+      signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut 
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { 
+      getFirestore, doc, getDoc, setDoc, onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    // ЗАМЕНИТЕ НА URL ВАШЕГО CLOUDFLARE WORKER:
+    const GEMINI_BASE_URL = "https://gemini-proxy.<ваш-поддомен>.workers.dev";
+
+    // ЗАМЕНИТЕ НА КОНФИГУРАЦИЮ ВАШЕГО FIREBASE ПРОЕКТА:
+    const firebaseConfig = {
+      apiKey: "ВАШ_FIREBASE_API_KEY",
+      authDomain: "ВАШ_ПРОЕКТ.firebaseapp.com",
+      projectId: "ВАШ_ПРОЕКТ",
+      storageBucket: "ВАШ_ПРОЕКТ.firebasestorage.app",
+      messagingSenderId: "ВАШ_SENDER_ID",
+      appId: "ВАШ_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const defaultAgents = [
+      {
+        id: 'agent-analyst',
+        name: 'CRM-Аналитик',
+        model: 'gemini-3.5-flash-lite',
+        systemInstruction: 'Ты - старший CRM и маркетинговый аналитик. Отвечай структурно, опирайся на цифры, когортный анализ, LTV и статистическую значимость. Избегай воды.',
+        temperature: 0.2,
+        useSearch: false,
+        history: []
+      },
+      {
+        id: 'agent-copywriter',
+        name: 'Email-Копирайтер',
+        model: 'gemini-3.5-flash-lite',
+        systemInstruction: 'Ты - сильный коммерческий редактор и email-маркетолог. Пиши цепляющие темы писем, структурированный текст и сильные CTA.',
+        temperature: 0.8,
+        useSearch: false,
+        history: []
+      }
+    ];
+
+    let currentUser = null;
+    let unsubscribeSnapshot = null;
+    let saveTimeout = null;
+    let pendingAttachment = null;
+
+    let state = {
+      apiKey: '',
+      activeAgentId: defaultAgents[0].id,
+      agents: defaultAgents
+    };
+
+    // --- DOM ЭЛЕМЕНТЫ ---
+    const authScreen = document.getElementById('authScreen');
+    const authError = document.getElementById('authError');
+    const syncStatus = document.getElementById('syncStatus');
+    const userEmailLabel = document.getElementById('userEmailLabel');
+    const agentsListEl = document.getElementById('agentsList');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const chatContainer = document.getElementById('chatContainer');
+    const currentAgentTitle = document.getElementById('currentAgentTitle');
+    const currentAgentSubtitle = document.getElementById('currentAgentSubtitle');
+    const agentNameInput = document.getElementById('agentNameInput');
+    const agentModelSelect = document.getElementById('agentModelSelect');
+    const agentSystemPrompt = document.getElementById('agentSystemPrompt');
+    const agentTempInput = document.getElementById('agentTempInput');
+    const tempValue = document.getElementById('tempValue');
+    const agentSearchToggle = document.getElementById('agentSearchToggle');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // Элементы вложений
+    const attachBtn = document.getElementById('attachBtn');
+    const fileAttachInput = document.getElementById('fileAttachInput');
+    const attachmentPreviewBar = document.getElementById('attachmentPreviewBar');
+    const attachmentIcon = document.getElementById('attachmentIcon');
+    const attachmentName = document.getElementById('attachmentName');
+    const attachmentSize = document.getElementById('attachmentSize');
+    const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
+
+    // --- ОБРАБОТКА ВЛОЖЕНИЙ (ФОТО, PDF, EXCEL, ТЕКСТ) ---
+    attachBtn.addEventListener('click', () => fileAttachInput.click());
+    removeAttachmentBtn.addEventListener('click', clearPendingAttachment);
+
+    function clearPendingAttachment() {
+      pendingAttachment = null;
+      fileAttachInput.value = '';
+      attachmentPreviewBar.classList.add('hidden');
+      attachmentPreviewBar.classList.remove('flex');
+    }
+
+    fileAttachInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.size > 15 * 1024 * 1024) {
+        alert('Файл слишком большой. Максимальный размер - 15 МБ.');
+        clearPendingAttachment();
+        return;
+      }
+
+      const ext = file.name.split('.').pop().toLowerCase();
+      attachmentName.textContent = file.name;
+      attachmentSize.textContent = `(${(file.size / 1024).toFixed(1)} КБ)`;
+      attachmentPreviewBar.classList.remove('hidden');
+      attachmentPreviewBar.classList.add('flex');
+
+      try {
+        if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+          attachmentIcon.textContent = file.type.startsWith('image/') ? '🖼️' : '📄';
+          const base64Data = await readFileAsBase64(file);
+          pendingAttachment = {
+            name: file.name,
+            kind: 'inline',
+            mimeType: file.type,
+            data: base64Data
+          };
+        } else if (ext === 'xlsx' || ext === 'xls') {
+          attachmentIcon.textContent = '📊';
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          let combinedText = '';
+          workbook.SheetNames.forEach(sheetName => {
+            const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+            combinedText += `\n--- Лист: ${sheetName} ---\n${csv}\n`;
+          });
+          pendingAttachment = {
+            name: file.name,
+            kind: 'text',
+            textContent: combinedText
+          };
+        } else {
+          attachmentIcon.textContent = '📝';
+          const textContent = await file.text();
+          pendingAttachment = {
+            name: file.name,
+            kind: 'text',
+            textContent: textContent
+          };
+        }
+      } catch (err) {
+        alert('Не удалось прочитать файл: ' + err.message);
+        clearPendingAttachment();
+      }
+    });
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (WORD .DOC, .TXT, .CSV И ДР.) ---
+    window.downloadGeneratedFile = async function(filename, content, mimeType = 'text/plain;charset=utf-8') {
+      try {
+        if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+          const blob = new Blob([content], { type: mimeType });
+          const file = new File([blob], filename, { type: mimeType });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: filename
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Native share fallback to blob:', err);
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    window.downloadAsWordDoc = function(filename, markdownText) {
+      const htmlContent = marked.parse(markdownText);
+      const wordHtml = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset='utf-8'>
+          <title>${escapeHtml(filename)}</title>
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111111; }
+            h1, h2, h3 { color: #1e3a8a; margin-top: 12pt; margin-bottom: 6pt; }
+            table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
+            th, td { border: 1px solid #888888; padding: 6pt 8pt; text-align: left; }
+            th { background-color: #f1f5f9; font-weight: bold; }
+            pre, code { font-family: Consolas, monospace; background-color: #f8fafc; padding: 4pt; }
+          </style>
+        </head>
+        <body>${htmlContent}</body>
+        </html>`;
+      window.downloadGeneratedFile(filename, '\ufeff' + wordHtml, 'application/msword;charset=utf-8');
+    };
+
+    // --- АВТОРИЗАЦИЯ ---
+    document.getElementById('emailLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      authError.classList.add('hidden');
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        authError.textContent = 'Ошибка входа: ' + err.message;
+        authError.classList.remove('hidden');
+      }
+    });
+
+    getRedirectResult(auth).catch((err) => {
+      authError.textContent = 'Ошибка входа Google: ' + err.message;
+      authError.classList.remove('hidden');
+    });
+
+    document.getElementById('googleLoginBtn').addEventListener('click', async () => {
+      authError.classList.add('hidden');
+      const provider = new GoogleAuthProvider();
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (err) {
+        authError.textContent = 'Ошибка входа Google: ' + err.message;
+        authError.classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      signOut(auth);
+    });
+
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        authScreen.classList.add('hidden');
+        userEmailLabel.textContent = user.email;
+        await initCloudSync(user.uid);
+      } else {
+        authScreen.classList.remove('hidden');
+      }
+    });
+
+    // --- ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ FIRESTORE ---
+    async function initCloudSync(uid) {
+      const userDocRef = doc(db, 'users', uid);
+      syncStatus.textContent = '↻ Загрузка...';
+      syncStatus.className = 'text-[11px] text-amber-400';
+
+      const docSnap = await getDoc(userDocRef);
+      if (!docSnap.exists()) {
+        const localSaved = localStorage.getItem('gemini_multi_agent_studio_v1');
+        if (localSaved) {
+          try { state = JSON.parse(localSaved); } catch (e) {}
+        }
+        await setDoc(userDocRef, state);
+      }
+
+      unsubscribeSnapshot = onSnapshot(userDocRef, (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return;
+        if (snapshot.exists()) {
+          state = snapshot.data();
+          if (!state.agents || state.agents.length === 0) state.agents = defaultAgents;
+          if (!state.activeAgentId) state.activeAgentId = state.agents[0].id;
+          renderAll();
+          syncStatus.textContent = '● Синхронизировано';
+          syncStatus.className = 'text-[11px] text-emerald-400';
+        }
+      });
+    }
+
+    function saveState() {
+      if (!currentUser) return;
+      syncStatus.textContent = '↻ Сохранение...';
+      syncStatus.className = 'text-[11px] text-amber-400';
+
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(async () => {
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          await setDoc(userDocRef, state);
+          syncStatus.textContent = '● Синхронизировано';
+          syncStatus.className = 'text-[11px] text-emerald-400';
+        } catch (err) {
+          console.error('Ошибка записи в Firestore:', err);
+          syncStatus.textContent = '✕ Ошибка облака';
+          syncStatus.className = 'text-[11px] text-red-400';
+        }
+      }, 400);
+    }
+
+    function getActiveAgent() {
+      return state.agents.find(a => a.id === state.activeAgentId) || state.agents[0];
+    }
+
+    // --- МОБИЛЬНЫЕ ШТОРКИ ---
+    const leftSidebar = document.getElementById('leftSidebar');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const mobileBackdrop = document.getElementById('mobileBackdrop');
+
+    function closeDrawers() {
+      leftSidebar.classList.add('-translate-x-full');
+      settingsPanel.classList.add('translate-x-full');
+      mobileBackdrop.classList.add('hidden');
+    }
+
+    function openLeftDrawer() {
+      closeDrawers();
+      leftSidebar.classList.remove('-translate-x-full');
+      mobileBackdrop.classList.remove('hidden');
+    }
+
+    function openRightDrawer() {
+      if (window.innerWidth >= 1024) {
+        settingsPanel.classList.toggle('lg:hidden');
+      } else {
+        closeDrawers();
+        settingsPanel.classList.remove('translate-x-full');
+        mobileBackdrop.classList.remove('hidden');
+      }
+    }
+
+    document.getElementById('openLeftBtn').addEventListener('click', openLeftDrawer);
+    document.getElementById('closeLeftBtn').addEventListener('click', closeDrawers);
+    document.getElementById('toggleSettingsBtn').addEventListener('click', openRightDrawer);
+    document.getElementById('closeRightBtn').addEventListener('click', closeDrawers);
+    mobileBackdrop.addEventListener('click', closeDrawers);
+
+    // --- РЕНДЕР ИНТЕРФЕЙСА ---
+    function renderAll() {
+      if (document.activeElement !== apiKeyInput) {
+        apiKeyInput.value = state.apiKey || '';
+      }
+      renderAgentsList();
+      renderActiveAgent();
+    }
+
+    function renderAgentsList() {
+      agentsListEl.innerHTML = '';
+      state.agents.forEach(agent => {
+        const isActive = agent.id === state.activeAgentId;
+        const btn = document.createElement('button');
+        btn.className = `text-left px-3 py-2.5 rounded-lg transition flex flex-col gap-0.5 ${
+          isActive ? 'bg-blue-600/20 border border-blue-500/50 text-white' : 'hover:bg-slate-800/70 text-slate-300 border border-transparent'
+        }`;
+        btn.innerHTML = `
+          <span class="font-medium text-sm truncate">${escapeHtml(agent.name)}</span>
+          <span class="text-[11px] text-slate-400 truncate">${agent.model} • Сообщений: ${agent.history.length}</span>
+        `;
+        btn.onclick = () => {
+          state.activeAgentId = agent.id;
+          saveState();
+          renderAll();
+          closeDrawers();
+        };
+        agentsListEl.appendChild(btn);
+      });
+    }
+
+    function renderActiveAgent() {
+      const agent = getActiveAgent();
+      if (!agent) return;
+
+      currentAgentTitle.textContent = agent.name;
+      currentAgentSubtitle.textContent = `${agent.model} • T:${agent.temperature}${agent.useSearch ? ' • Search' : ''}`;
+
+      if (document.activeElement !== agentNameInput) agentNameInput.value = agent.name;
+      
+      if (!Array.from(agentModelSelect.options).some(opt => opt.value === agent.model)) {
+        const opt = document.createElement('option');
+        opt.value = agent.model;
+        opt.textContent = agent.model;
+        agentModelSelect.appendChild(opt);
+      }
+      agentModelSelect.value = agent.model;
+
+      if (document.activeElement !== agentSystemPrompt) agentSystemPrompt.value = agent.systemInstruction;
+      agentTempInput.value = agent.temperature;
+      tempValue.textContent = agent.temperature;
+      agentSearchToggle.checked = !!agent.useSearch;
+
+      renderChatHistory(agent);
+    }
+
+    function renderChatHistory(agent) {
+      chatContainer.innerHTML = '';
+      if (!agent.history || agent.history.length === 0) {
+        chatContainer.innerHTML = `
+          <div class="m-auto text-center max-w-sm px-4 text-slate-500 text-xs sm:text-sm">
+            <p class="mb-1 text-slate-300 font-medium">Чат с агентом «${escapeHtml(agent.name)}»</p>
+            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скачать в Word (.doc) или .txt.</p>
+          </div>`;
+        return;
+      }
+
+      agent.history.forEach((msg, msgIndex) => {
+        const isUser = msg.role === 'user';
+        const wrapper = document.createElement('div');
+        wrapper.className = `flex flex-col max-w-[90%] sm:max-w-3xl ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = `px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-sm leading-relaxed break-words ${
+          isUser 
+            ? 'bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap' 
+            : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-sm prose'
+        }`;
+
+        if (isUser) {
+          bubble.textContent = msg.text;
+          wrapper.appendChild(bubble);
+        } else {
+          const fileBlocks = [];
+          const processedText = msg.text.replace(/```file:([^\n]+)\n([\s\S]*?)```/g, (match, fname, fcontent) => {
+            const cleanName = fname.trim();
+            fileBlocks.push({ name: cleanName, content: fcontent });
+            return `\n> 📄 **Сформирован файл:** \`${cleanName}\`\n`;
+          });
+
+          bubble.innerHTML = marked.parse(processedText);
+          bubble.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+          wrapper.appendChild(bubble);
+
+          const actionsRow = document.createElement('div');
+          actionsRow.className = 'flex flex-wrap items-center gap-2 mt-1.5 px-1';
+
+          fileBlocks.forEach(fb => {
+            const fileBtn = document.createElement('button');
+            fileBtn.type = 'button';
+            fileBtn.className = 'text-[11px] bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1';
+            fileBtn.innerHTML = `<span>⬇️ Скачать ${escapeHtml(fb.name)}</span>`;
+            fileBtn.onclick = () => {
+              const payload = fb.name.toLowerCase().endsWith('.csv') ? '\ufeff' + fb.content : fb.content;
+              window.downloadGeneratedFile(fb.name, payload);
+            };
+            actionsRow.appendChild(fileBtn);
+          });
+
+          const saveDocBtn = document.createElement('button');
+          saveDocBtn.type = 'button';
+          saveDocBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 px-2.5 py-1 rounded-lg transition';
+          saveDocBtn.textContent = '📄 В Word (.doc)';
+          saveDocBtn.onclick = () => {
+            const stamp = new Date().toISOString().slice(0, 10);
+            window.downloadAsWordDoc(`${agent.name}-${stamp}-${msgIndex + 1}.doc`, msg.text);
+          };
+          actionsRow.appendChild(saveDocBtn);
+
+          const saveTxtBtn = document.createElement('button');
+          saveTxtBtn.type = 'button';
+          saveTxtBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 px-2.5 py-1 rounded-lg transition';
+          saveTxtBtn.textContent = '📝 В текст (.txt)';
+          saveTxtBtn.onclick = () => {
+            const stamp = new Date().toISOString().slice(0, 10);
+            const plainText = bubble.innerText || msg.text;
+            window.downloadGeneratedFile(`${agent.name}-${stamp}-${msgIndex + 1}.txt`, '\ufeff' + plainText, 'text/plain;charset=utf-8');
+          };
+          actionsRow.appendChild(saveTxtBtn);
+
+          wrapper.appendChild(actionsRow);
+        }
+
+        chatContainer.appendChild(wrapper);
+      });
+
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    messageInput.addEventListener('input', function () {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 144) + 'px';
+    });
+
+    // --- ЗАПРОС К GEMINI API ЧЕРЕЗ ПРОКСИ ---
+    async function sendMessageToGemini(userText) {
+      if (!state.apiKey) {
+        alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
+        openLeftDrawer();
+        return;
+      }
+
+      const agent = getActiveAgent();
+      const attachment = pendingAttachment;
+      clearPendingAttachment();
+
+      let historyDisplayText = userText;
+      if (attachment) {
+        const badge = `📎 [${attachment.name}]`;
+        historyDisplayText = userText ? `${badge}\n${userText}` : badge;
+      }
+
+      agent.history.push({ role: 'user', text: historyDisplayText });
+      saveState();
+      renderChatHistory(agent);
+      renderAgentsList();
+
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'self-start bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2 rounded-2xl text-xs animate-pulse';
+      loadingDiv.textContent = attachment
+        ? `${agent.name} изучает файл «${attachment.name}»...`
+        : `${agent.name} печатает...`;
+      chatContainer.appendChild(loadingDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      sendBtn.disabled = true;
+
+      const maxRetries = 3;
+      const retryDelayMs = 2000;
+
+      try {
+        const contents = agent.history.slice(0, -1).map(item => ({
+          role: item.role === 'user' ? 'user' : 'model',
+          parts: [{ text: item.text }]
+        }));
+
+        const currentParts = [];
+        if (attachment) {
+          if (attachment.kind === 'inline') {
+            currentParts.push({
+              inlineData: {
+                mimeType: attachment.mimeType,
+                data: attachment.data
+              }
+            });
+          } else if (attachment.kind === 'text') {
+            currentParts.push({
+              text: `Содержимое прикрепленного файла "${attachment.name}":\n\n${attachment.textContent}`
+            });
+          }
+        }
+        currentParts.push({
+          text: userText || 'Проанализируй прикрепленный файл и дай подробный ответ.'
+        });
+
+        contents.push({
+          role: 'user',
+          parts: currentParts
+        });
+
+        const generationConfig = {
+          temperature: parseFloat(agent.temperature)
+        };
+
+        if (!agent.model.includes('lite') && agent.model.includes('gemini-3')) {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+
+        const fileExportRule = '\n\n[Системное правило вывода файлов]: Если пользователь просит прислать результат файлом (таблицей CSV, JSON, TXT, HTML, SQL или скриптом), оформи содержимое файла в отдельный блок кода с префиксом file:имя_файла.расширение (например: ```file:report.csv\\n...\\n```), чтобы приложение создало кнопку скачивания.';
+        const combinedSystemPrompt = ((agent.systemInstruction || '').trim() + fileExportRule).trim();
+
+        const requestBody = {
+          contents: contents,
+          generationConfig: generationConfig,
+          systemInstruction: {
+            parts: [{ text: combinedSystemPrompt }]
+          }
+        };
+
+        if (agent.useSearch) {
+          requestBody.tools = [{ google_search: {} }];
+        }
+
+        const url = `${GEMINI_BASE_URL}/v1beta/models/${agent.model}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
+        let data = null;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+
+          const rawText = await response.text();
+          try {
+            data = JSON.parse(rawText);
+          } catch (e) {
+            if ((response.status === 524 || response.status === 502 || response.status === 504) && attempt < maxRetries) {
+              loadingDiv.textContent = `${agent.name}: таймаут шлюза (${response.status}), повтор через 2 сек (${attempt + 1}/${maxRetries})...`;
+              await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+              continue;
+            }
+            throw new Error(`Сервер вернул некорректный ответ (${response.status}): ${rawText.slice(0, 100)}`);
+          }
+
+          if (response.ok) {
+            break;
+          }
+
+          const errMsg = data.error?.message || `HTTP Error ${response.status}`;
+          const isOverloaded =
+            response.status === 503 ||
+            response.status === 429 ||
+            /high demand|overloaded|try again later|unavailable/i.test(errMsg);
+
+          if (isOverloaded && attempt < maxRetries) {
+            loadingDiv.textContent = `${agent.name}: высокая нагрузка, повтор через 2 сек (попытка ${attempt + 1}/${maxRetries})...`;
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            continue;
+          }
+
+          throw new Error(errMsg);
+        }
+
+        const replyText = data.candidates?.[0]?.content?.parts
+          ?.map(p => p.text)
+          .filter(Boolean)
+          .join('\n') || 'Пустой ответ от модели.';
+
+        agent.history.push({ role: 'model', text: replyText });
+        saveState();
+      } catch (err) {
+        agent.history.push({ role: 'model', text: `**Ошибка API:** ${err.message}` });
+        saveState();
+      } finally {
+        loadingDiv.remove();
+        sendBtn.disabled = false;
+        renderChatHistory(agent);
+        renderAgentsList();
+      }
+    }
+
+    // --- СОБЫТИЯ ---
+    apiKeyInput.addEventListener('input', (e) => {
+      state.apiKey = e.target.value.trim();
+      saveState();
+    });
+
+    document.getElementById('addAgentBtn').addEventListener('click', () => {
+      const newAgent = {
+        id: 'agent-' + Date.now(),
+        name: `Агент #${state.agents.length + 1}`,
+        model: 'gemini-3.5-flash-lite',
+        systemInstruction: 'Ты - полезный ИИ-ассистент.',
+        temperature: 0.7,
+        useSearch: false,
+        history: []
+      };
+      state.agents.push(newAgent);
+      state.activeAgentId = newAgent.id;
+      saveState();
+      renderAll();
+      closeDrawers();
+    });
+
+    document.getElementById('deleteAgentBtn').addEventListener('click', () => {
+      if (state.agents.length <= 1) {
+        alert('Нельзя удалить последнего агента.');
+        return;
+      }
+      if (!confirm('Удалить этого агента и всю его историю из облака?')) return;
+      state.agents = state.agents.filter(a => a.id !== state.activeAgentId);
+      state.activeAgentId = state.agents[0].id;
+      saveState();
+      renderAll();
+      closeDrawers();
+    });
+
+    document.getElementById('clearChatBtn').addEventListener('click', () => {
+      if (!confirm('Очистить переписку с этим агентом?')) return;
+      const agent = getActiveAgent();
+      agent.history = [];
+      saveState();
+      renderAll();
+    });
+
+    document.getElementById('refreshModelsBtn').addEventListener('click', async () => {
+      if (!state.apiKey) return alert('Сначала вставьте API Key в левом меню.');
+      try {
+        const res = await fetch(`${GEMINI_BASE_URL}/v1beta/models?key=${encodeURIComponent(state.apiKey)}`);
+        const data = await res.json();
+        const models = (data.models || [])
+          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+          .map(m => m.name.replace('models/', ''));
+        
+        if (models.length === 0) return alert('Модели не найдены.');
+        agentModelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+        if (models.includes(getActiveAgent().model)) {
+          agentModelSelect.value = getActiveAgent().model;
+        } else {
+          getActiveAgent().model = models[0];
+          saveState();
+          renderAll();
+        }
+        alert(`Загружено моделей: ${models.length}`);
+      } catch (e) {
+        alert('Ошибка загрузки списка моделей: ' + e.message);
+      }
+    });
+
+    agentNameInput.addEventListener('input', (e) => {
+      getActiveAgent().name = e.target.value || 'Без имени';
+      saveState();
+      renderAgentsList();
+      currentAgentTitle.textContent = getActiveAgent().name;
+    });
+
+    agentModelSelect.addEventListener('change', (e) => {
+      getActiveAgent().model = e.target.value;
+      saveState();
+      renderAll();
+    });
+
+    agentSystemPrompt.addEventListener('input', (e) => {
+      getActiveAgent().systemInstruction = e.target.value;
+      saveState();
+    });
+
+    agentTempInput.addEventListener('input', (e) => {
+      getActiveAgent().temperature = parseFloat(e.target.value);
+      tempValue.textContent = e.target.value;
+      saveState();
+      renderActiveAgent();
+    });
+
+    agentSearchToggle.addEventListener('change', (e) => {
+      getActiveAgent().useSearch = e.target.checked;
+      saveState();
+      renderActiveAgent();
+    });
+
+    document.getElementById('chatForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = messageInput.value.trim();
+      if (!text && !pendingAttachment) return;
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      sendMessageToGemini(text);
+    });
+
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) {
+        e.preventDefault();
+        document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+      }
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const exportData = { ...state, apiKey: '' };
+      window.downloadGeneratedFile(
+        `gemini-agents-backup-${new Date().toISOString().slice(0,10)}.json`,
+        JSON.stringify(exportData, null, 2),
+        'application/json;charset=utf-8'
+      );
+    });
+
+    document.getElementById('importInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (Array.isArray(imported.agents) && imported.agents.length > 0) {
+            state.agents = imported.agents;
+            state.activeAgentId = imported.activeAgentId || imported.agents[0].id;
+            saveState();
+            renderAll();
+            closeDrawers();
+            alert('Агенты и история восстановлены и загружены в облако!');
+          }
+        } catch (err) {
+          alert('Ошибка чтения JSON файла.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+  </script>
+</body>
+</html>
