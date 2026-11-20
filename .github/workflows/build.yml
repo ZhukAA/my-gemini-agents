@@ -1,4 +1,4 @@
-name: Build Android APK 
+name: Build Android APK
 
 on:
   push:
@@ -26,39 +26,7 @@ jobs:
       - name: Prepare web assets and Capacitor
         run: |
           mkdir -p www assets
-          cp index.html www/fallback.html
-          cat << 'EOF' > www/index.html
-          <!DOCTYPE html>
-          <html lang="ru">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <style>
-              body { background: #020617; color: #94a3b8; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
-              .spinner { width: 32px; height: 32px; border: 3px solid #1e293b; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="spinner"></div>
-            <div id="status">Запуск Gemini Agents...</div>
-            <script>
-              const REMOTE_PAGE = "https://zhukaa.github.io/my-gemini-agents/?v=" + Date.now();
-              const fallbackTimer = setTimeout(() => {
-                document.getElementById("status").textContent = "Запуск локальной версии...";
-                window.location.replace("fallback.html");
-              }, 2500);
-
-              if (navigator.onLine) {
-                window.location.replace(REMOTE_PAGE);
-              } else {
-                clearTimeout(fallbackTimer);
-                window.location.replace("fallback.html");
-              }
-            </script>
-          </body>
-          </html>
-          EOF
+          cp index.html www/index.html
 
           if [ -f icon.png ]; then
             cp icon.png assets/icon.png
@@ -68,7 +36,7 @@ jobs:
           fi
 
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets @capacitor/filesystem @capacitor/share
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets
           npx cap init "Gemini Agents" "com.zhukaa.geminiagents" --web-dir=www
           node -e '
             const fs = require("fs");
@@ -78,7 +46,6 @@ jobs:
               androidScheme: "https",
               allowNavigation: [
                 "zhukaa.github.io",
-                "*.github.io",
                 "*.firebaseapp.com",
                 "*.googleapis.com",
                 "*.gstatic.com",
@@ -88,14 +55,13 @@ jobs:
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
           '
           npx cap add android
-          npx cap sync android
 
           if [ -f assets/icon.png ]; then
             npx capacitor-assets generate --android --iconBackgroundColor '#020617' --iconBackgroundColorDark '#020617'
           fi
 
           echo 'dependencies { implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22")) }' >> android/app/build.gradle
-          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
         run: |
