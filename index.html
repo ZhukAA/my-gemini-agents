@@ -4,192 +4,417 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
   <title>Gemini Multi-Agent Studio (Cloud)</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Marked.js для рендеринга Markdown -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Highlight.js и SheetJS грузим асинхронно (defer) для быстрого старта на мобильном -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- Асинхронные вспомогательные библиотеки (не блокируют старт экрана) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    html, body { width: 100%; max-width: 100vw; overflow-x: hidden; }
-    .app-height { height: 100vh; height: 100dvh; }
-    .prose { max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      max-width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #020617;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body { display: flex; position: relative; }
+    button, input, textarea, select { font-family: inherit; color: inherit; }
+    button { cursor: pointer; border: none; background: none; }
+    .hidden { display: none !important; }
+
+    /* Экран авторизации */
+    #authScreen {
+      position: fixed; inset: 0; z-index: 50;
+      background: #020617;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .auth-card {
+      width: 100%; max-width: 380px;
+      background: #0f172a; border: 1px solid #1e293b;
+      border-radius: 16px; padding: 24px;
+      display: flex; flex-direction: column; gap: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    }
+    .auth-title { font-size: 20px; font-weight: 700; color: #60a5fa; text-align: center; }
+    .auth-sub { font-size: 12px; color: #94a3b8; text-align: center; margin-top: 4px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 12px; color: #94a3b8; }
+    .input-field {
+      width: 100%; background: #020617; border: 1px solid #334155;
+      border-radius: 8px; padding: 9px 12px; font-size: 14px; color: #fff;
+      outline: none;
+    }
+    .input-field:focus { border-color: #3b82f6; }
+    .btn-primary {
+      width: 100%; background: #2563eb; color: #fff;
+      font-weight: 500; padding: 10px; border-radius: 8px; font-size: 14px;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #3b82f6; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      width: 100%; background: #1e293b; color: #e2e8f0;
+      border: 1px solid #334155; font-weight: 500; padding: 10px;
+      border-radius: 8px; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-secondary:hover { background: #334155; }
+    .divider { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 12px; }
+    .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #1e293b; }
+    .error-text { font-size: 12px; color: #f87171; text-align: center; }
+
+    /* Затемнение для мобильных шторок */
+    #mobileBackdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 30;
+    }
+
+    /* Боковые панели */
+    .sidebar-left {
+      position: fixed; top: 0; bottom: 0; left: 0; z-index: 40;
+      width: 280px; background: #0f172a; border-right: 1px solid #1e293b;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 16px;
+      transform: translateX(-100%); transition: transform 0.2s ease;
+    }
+    .sidebar-left.open { transform: translateX(0); }
+
+    .sidebar-right {
+      position: fixed; top: 0; bottom: 0; right: 0; z-index: 40;
+      width: 320px; max-width: 86vw; background: #0f172a; border-left: 1px solid #1e293b;
+      display: flex; flex-direction: column; gap: 14px;
+      padding: 16px; overflow-y: auto;
+      transform: translateX(100%); transition: transform 0.2s ease;
+    }
+    .sidebar-right.open { transform: translateX(0); }
+
+    @media (min-width: 1024px) {
+      #mobileBackdrop { display: none !important; }
+      .sidebar-left { position: static; transform: none; flex-shrink: 0; }
+      .sidebar-right { position: static; transform: none; flex-shrink: 0; }
+      .sidebar-right.desktop-hidden { display: none; }
+      .mobile-only { display: none !important; }
+    }
+    @media (max-width: 1023px) {
+      .desktop-only { display: none !important; }
+    }
+
+    /* Список агентов */
+    .sidebar-top { display: flex; flex-direction: column; gap: 12px; overflow: hidden; flex: 1; }
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; }
+    .brand-title { font-size: 17px; font-weight: 700; color: #60a5fa; }
+    .sync-badge { font-size: 11px; color: #34d399; display: block; margin-top: 2px; }
+    .sync-badge.warn { color: #fbbf24; }
+    .sync-badge.err { color: #f87171; }
+    .btn-sm-blue {
+      background: #2563eb; color: #fff; font-size: 12px; font-weight: 500;
+      padding: 6px 10px; border-radius: 8px;
+    }
+    .btn-icon-close {
+      background: #1e293b; color: #cbd5e1; padding: 6px 9px; border-radius: 8px; font-size: 12px;
+    }
+    #agentsList { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 4px; }
+    .agent-item {
+      text-align: left; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px;
+      color: #cbd5e1;
+    }
+    .agent-item:hover { background: rgba(30,41,59,0.7); }
+    .agent-item.active { background: rgba(37,99,235,0.2); border-color: rgba(59,130,246,0.5); color: #fff; }
+    .agent-item-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-item-meta { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .sidebar-footer {
+      border-top: 1px solid #1e293b; padding-top: 12px;
+      display: flex; flex-direction: column; gap: 10px; font-size: 12px;
+    }
+    .footer-row { display: flex; gap: 8px; }
+    .btn-footer {
+      flex: 1; background: #1e293b; color: #cbd5e1; padding: 8px;
+      border-radius: 8px; text-align: center; font-size: 12px;
+    }
+    .btn-footer:hover { background: #334155; }
+    .user-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 6px; border-top: 1px solid rgba(30,41,59,0.8); color: #94a3b8;
+    }
+
+    /* Основной экран чата */
+    .main-area {
+      flex: 1; display: flex; flex-direction: column;
+      height: 100%; width: 100%; max-width: 100%; min-width: 0;
+      background: #020617; overflow: hidden;
+    }
+    .chat-header {
+      height: 56px; border-bottom: 1px solid #1e293b;
+      padding: 0 14px; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; background: rgba(15,23,42,0.8); flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .btn-menu {
+      background: #1e293b; color: #e2e8f0; padding: 8px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .header-titles { min-width: 0; }
+    #currentAgentTitle { font-size: 15px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #currentAgentSubtitle { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .btn-header {
+      background: #1e293b; color: #e2e8f0; font-size: 12px;
+      padding: 7px 10px; border-radius: 8px; display: flex; align-items: center; gap: 4px;
+    }
+    .btn-header:hover { background: #334155; }
+
+    /* Лента сообщений */
+    #chatContainer {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 14px; display: flex; flex-direction: column; gap: 12px; width: 100%;
+    }
+    .empty-state {
+      margin: auto; text-align: center; max-width: 340px; padding: 16px;
+      color: #64748b; font-size: 13px; line-height: 1.5;
+    }
+    .empty-state strong { color: #cbd5e1; display: block; margin-bottom: 4px; font-size: 14px; }
+
+    .msg-wrapper {
+      display: flex; flex-direction: column;
+      max-width: 92%; min-width: 0;
+    }
+    @media (min-width: 768px) { .msg-wrapper { max-width: 760px; } }
+    .msg-wrapper.user { align-self: flex-end; align-items: flex-end; }
+    .msg-wrapper.model { align-self: flex-start; align-items: flex-start; }
+
+    .msg-bubble {
+      width: 100%; max-width: 100%;
+      padding: 10px 14px; border-radius: 16px;
+      font-size: 14px; line-height: 1.5;
+      word-wrap: break-word; overflow-wrap: break-word; overflow: hidden;
+    }
+    .msg-bubble.user {
+      background: #2563eb; color: #fff;
+      border-bottom-right-radius: 4px; white-space: pre-wrap;
+    }
+    .msg-bubble.model {
+      background: #0f172a; border: 1px solid #1e293b; color: #e2e8f0;
+      border-bottom-left-radius: 4px;
+    }
+    .msg-bubble.loading { color: #94a3b8; font-size: 12px; }
+
+    /* Markdown и блоки кода внутри ответа */
     .prose pre {
-      background: #1e293b;
-      padding: 10px;
-      border-radius: 8px;
-      margin: 8px 0;
-      font-size: 0.85em;
-      max-width: 100%;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow-x: hidden;
+      background: #1e293b; padding: 10px; border-radius: 8px;
+      margin: 8px 0; font-size: 12.5px; max-width: 100%;
+      white-space: pre-wrap; word-break: break-word; overflow-x: hidden;
     }
-    .prose code {
-      font-family: monospace;
-      font-size: 0.9em;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .prose p { margin-bottom: 0.6em; }
+    .prose code { font-family: monospace; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
+    .prose p { margin-bottom: 8px; }
     .prose p:last-child { margin-bottom: 0; }
-    .prose ul { list-style: disc; margin-left: 1.3em; margin-bottom: 0.6em; }
-    .prose ol { list-style: decimal; margin-left: 1.3em; margin-bottom: 0.6em; }
-    .prose table { border-collapse: collapse; width: 100%; margin: 10px 0; display: block; overflow-x: auto; max-width: 100%; }
+    .prose ul, .prose ol { margin-left: 20px; margin-bottom: 8px; }
+    .prose table { border-collapse: collapse; width: 100%; margin: 8px 0; display: block; overflow-x: auto; }
     .prose th, .prose td { border: 1px solid #475569; padding: 6px 8px; text-align: left; }
     .prose th { background: #334155; }
+
+    .msg-actions { display: flex; gap: 8px; margin-top: 6px; padding: 0 4px; }
+    .btn-copy {
+      font-size: 11px; background: #0f172a; color: #cbd5e1;
+      border: 1px solid #334155; padding: 4px 10px; border-radius: 8px;
+    }
+    .btn-copy.copied { color: #34d399; border-color: rgba(16,185,129,0.5); }
+
+    /* Нижняя панель ввода */
+    .input-area {
+      padding: 10px 12px; border-top: 1px solid #1e293b;
+      background: rgba(15,23,42,0.75); flex-shrink: 0; width: 100%;
+    }
+    .input-inner { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .attach-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0f172a; border: 1px solid rgba(59,130,246,0.4);
+      border-radius: 10px; padding: 7px 12px; font-size: 12px;
+    }
+    .attach-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .attach-name { color: #e2e8f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-form { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
+    .btn-attach {
+      background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+      height: 40px; width: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    #messageInput {
+      flex: 1; min-width: 0; background: #0f172a; border: 1px solid #334155;
+      border-radius: 12px; padding: 9px 14px; font-size: 14px; line-height: 20px;
+      min-height: 40px; max-height: 140px; color: #fff;
+      resize: none; overflow-y: auto; outline: none;
+    }
+    #messageInput:focus { border-color: #3b82f6; }
+    .btn-send {
+      background: #2563eb; color: #fff; font-weight: 500;
+      height: 40px; padding: 0 14px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
+    }
+    .btn-send:disabled { opacity: 0.5; }
+
+    /* Настройки правой панели */
+    .settings-head {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #1e293b; padding-bottom: 10px;
+    }
+    .switch-box {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #020617; padding: 12px; border-radius: 8px; border: 1px solid #1e293b;
+    }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 app-height flex overflow-hidden font-sans relative">
+<body>
+
+  <!-- ИНДИКАТОР ЗАГРУЗКИ (СКРЫВАЕТСЯ ПОСЛЕ СТАРТА FIREBASE) -->
+  <div id="bootFallback" style="position:fixed;inset:0;background:#020617;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:60;">
+    <div style="font-size:18px;color:#60a5fa;font-weight:700;margin-bottom:8px;">Gemini Agents</div>
+    <div id="bootMsg" style="font-size:13px;margin-bottom:16px;max-width:300px;line-height:1.4;">Подключение к облаку...</div>
+    <button onclick="location.reload()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:9px 18px;border-radius:10px;font-size:13px;">Обновить</button>
+  </div>
+  <script>
+    window.addEventListener('error', function(e) {
+      var msg = document.getElementById('bootMsg');
+      if (msg) msg.textContent = 'Ошибка: ' + (e.message || 'проверьте интернет');
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var msg = document.getElementById('bootMsg');
+      if (msg && document.getElementById('bootFallback').style.display !== 'none') {
+        msg.textContent = 'Сбой модуля: ' + ((e.reason && e.reason.message) || e.reason || 'нет ответа от сервера');
+      }
+    });
+    setTimeout(function() {
+      var fb = document.getElementById('bootFallback');
+      var msg = document.getElementById('bootMsg');
+      if (fb && fb.style.display !== 'none' && msg) {
+        msg.textContent = 'Серверы Google отвечают медленно. Проверьте сеть и нажмите «Обновить».';
+      }
+    }, 5000);
+  </script>
 
   <!-- ЭКРАН АВТОРИЗАЦИИ -->
-  <div id="authScreen" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
-    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4 shadow-2xl">
-      <div class="text-center">
-        <h1 class="text-xl font-bold text-blue-400">Gemini Agents Cloud</h1>
-        <p class="text-xs text-slate-400 mt-1">Войдите для синхронизации чатов, настроек и API-ключа</p>
+  <div id="authScreen">
+    <div class="auth-card">
+      <div>
+        <div class="auth-title">Gemini Agents Cloud</div>
+        <div class="auth-sub">Войдите для синхронизации чатов, настроек и API-ключа</div>
       </div>
 
-      <form id="emailLoginForm" class="flex flex-col gap-3">
-        <div>
-          <label class="text-xs text-slate-400 block mb-1">Email</label>
-          <input type="email" id="loginEmail" required placeholder="you@example.com"
-                 class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+      <form id="emailLoginForm" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="loginEmail" required placeholder="you@example.com" class="input-field" />
         </div>
-        <div>
-          <label class="text-xs text-slate-400 block mb-1">Пароль</label>
-          <input type="password" id="loginPassword" required placeholder="••••••••"
-                 class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+        <div class="form-group">
+          <label class="form-label">Пароль</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••" class="input-field" />
         </div>
-        <button type="submit" id="emailLoginBtn"
-                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg text-sm transition mt-1">
-          Войти по Email
-        </button>
+        <button type="submit" id="emailLoginBtn" class="btn-primary">Войти по Email</button>
       </form>
 
-      <div class="relative flex py-1 items-center">
-        <div class="flex-grow border-t border-slate-800"></div>
-        <span class="flex-shrink mx-3 text-xs text-slate-500">или</span>
-        <div class="flex-grow border-t border-slate-800"></div>
-      </div>
+      <div class="divider">или</div>
 
-      <button id="googleLoginBtn" type="button"
-              class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 border border-slate-700">
-        <span>Войти через Google</span>
-      </button>
-
-      <p id="authError" class="text-xs text-red-400 text-center hidden"></p>
+      <button id="googleLoginBtn" type="button" class="btn-secondary">Войти через Google</button>
+      <p id="authError" class="error-text hidden"></p>
     </div>
   </div>
 
-  <!-- ЗАТЕМНЕНИЕ ФОНА ДЛЯ МОБИЛЬНЫХ ШТОРОК -->
-  <div id="mobileBackdrop" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden"></div>
+  <div id="mobileBackdrop" class="hidden"></div>
 
   <!-- ЛЕВАЯ ПАНЕЛЬ -->
-  <aside id="leftSidebar" class="fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 transform -translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 shrink-0">
-    <div class="flex flex-col gap-3 overflow-hidden">
-      <div class="flex items-center justify-between">
+  <aside id="leftSidebar" class="sidebar-left">
+    <div class="sidebar-top">
+      <div class="sidebar-header">
         <div>
-          <h1 class="text-lg font-bold tracking-tight text-blue-400">Gemini Agents</h1>
-          <span id="syncStatus" class="text-[11px] text-emerald-400">● Облако подключено</span>
+          <div class="brand-title">Gemini Agents</div>
+          <span id="syncStatus" class="sync-badge">● Облако подключено</span>
         </div>
-        <div class="flex items-center gap-1.5">
-          <button id="addAgentBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-medium transition">
-            + Новый
-          </button>
-          <button id="closeLeftBtn" class="lg:hidden text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800">
-            ✕
-          </button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="addAgentBtn" class="btn-sm-blue">+ Новый</button>
+          <button id="closeLeftBtn" class="btn-icon-close mobile-only">✕</button>
         </div>
       </div>
-
-      <div id="agentsList" class="flex flex-col gap-1.5 overflow-y-auto pr-1"></div>
+      <div id="agentsList"></div>
     </div>
 
-    <!-- Нижний блок: API Key, Бэкап и Выход -->
-    <div class="border-t border-slate-800 pt-3 flex flex-col gap-2.5 text-xs">
-      <div>
-        <label class="text-slate-400 block mb-1">Gemini API Key (в облаке):</label>
-        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." 
-               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 focus:outline-none focus:border-blue-500" />
+    <div class="sidebar-footer">
+      <div class="form-group">
+        <label class="form-label">Gemini API Key (в облаке):</label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="input-field" style="font-size:12px;padding:7px 10px;" />
       </div>
-      <div class="flex gap-2">
-        <button id="exportBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 transition">📋 Копия JSON</button>
-        <label class="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-slate-300 text-center cursor-pointer transition">
+      <div class="footer-row">
+        <button id="exportBtn" class="btn-footer">📋 Копия JSON</button>
+        <label class="btn-footer" style="cursor:pointer;">
           Импорт
           <input type="file" id="importInput" accept=".json" class="hidden" />
         </label>
       </div>
-      <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-slate-400">
-        <span id="userEmailLabel" class="truncate max-w-[160px]"></span>
-        <button id="logoutBtn" class="text-red-400 hover:text-red-300 font-medium">Выйти</button>
+      <div class="user-row">
+        <span id="userEmailLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:165px;"></span>
+        <button id="logoutBtn" style="color:#f87171;font-weight:500;">Выйти</button>
       </div>
     </div>
   </aside>
 
   <!-- ЦЕНТРАЛЬНАЯ ОБЛАСТЬ -->
-  <main class="flex-1 flex flex-col h-full w-full max-w-full min-w-0 bg-slate-950 overflow-hidden">
-    <header class="h-14 border-b border-slate-800 px-3 sm:px-5 flex items-center justify-between gap-2 bg-slate-900/70 shrink-0">
-      <div class="flex items-center gap-2.5 min-w-0">
-        <button id="openLeftBtn" class="lg:hidden p-2 -ml-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <main class="main-area">
+    <header class="chat-header">
+      <div class="header-left">
+        <button id="openLeftBtn" class="btn-menu mobile-only">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-
-        <div class="min-w-0">
-          <h2 id="currentAgentTitle" class="font-semibold text-sm sm:text-base text-white truncate">Агент</h2>
-          <p id="currentAgentSubtitle" class="text-[11px] sm:text-xs text-slate-400 truncate">gemini-3.5-flash-lite</p>
+        <div class="header-titles">
+          <div id="currentAgentTitle">Агент</div>
+          <div id="currentAgentSubtitle">gemini-3.5-flash-lite</div>
         </div>
       </div>
 
-      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        <button id="clearChatBtn" class="text-xs bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 px-2.5 py-1.5 rounded-lg transition">
-          <span class="hidden sm:inline">Очистить</span>
-          <span class="sm:hidden">🗑️</span>
+      <div class="header-actions">
+        <button id="clearChatBtn" class="btn-header">
+          <span class="desktop-only">Очистить</span>
+          <span class="mobile-only">🗑️</span>
         </button>
-        <button id="toggleSettingsBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+        <button id="toggleSettingsBtn" class="btn-header">
           <span>⚙️</span>
-          <span class="hidden sm:inline">Настройки</span>
+          <span class="desktop-only">Настройки</span>
         </button>
       </div>
     </header>
 
-    <div id="chatContainer" class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:p-6 flex flex-col gap-3 sm:gap-4 w-full"></div>
+    <div id="chatContainer"></div>
 
-    <!-- НИЖНЯЯ ПАНЕЛЬ ВВОДА С ПРЕВЬЮ ВЛОЖЕНИЙ -->
-    <div class="p-2.5 sm:p-4 border-t border-slate-800 bg-slate-900/60 shrink-0 w-full">
-      <div class="max-w-4xl mx-auto flex flex-col gap-2 w-full">
-        <!-- Плашка прикрепленного файла -->
-        <div id="attachmentPreviewBar" class="hidden items-center justify-between bg-slate-900 border border-blue-500/40 rounded-xl px-3 py-2 text-xs w-full">
-          <div class="flex items-center gap-2 min-w-0">
-            <span id="attachmentIcon" class="text-base shrink-0">📎</span>
-            <span id="attachmentName" class="text-slate-200 font-medium truncate">file.pdf</span>
-            <span id="attachmentSize" class="text-slate-400 shrink-0"></span>
+    <!-- ПАНЕЛЬ ВВОДА -->
+    <div class="input-area">
+      <div class="input-inner">
+        <div id="attachmentPreviewBar" class="attach-bar hidden">
+          <div class="attach-info">
+            <span id="attachmentIcon">📎</span>
+            <span id="attachmentName" class="attach-name">file.pdf</span>
+            <span id="attachmentSize" style="color:#94a3b8;flex-shrink:0;"></span>
           </div>
-          <button type="button" id="removeAttachmentBtn" class="text-slate-400 hover:text-red-400 px-2 py-0.5 font-bold shrink-0">✕</button>
+          <button type="button" id="removeAttachmentBtn" style="color:#94a3b8;font-weight:700;padding:0 6px;">✕</button>
         </div>
 
-        <form id="chatForm" class="flex items-end gap-2 w-full">
+        <form id="chatForm" class="chat-form">
           <input type="file" id="fileAttachInput" class="hidden"
                  accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.xlsx,.xls,.py,.js,.sql,.xml" />
-          
-          <button type="button" id="attachBtn" title="Прикрепить фото, PDF, Excel или текст"
-                  class="bg-slate-800 hover:bg-slate-700 text-slate-200 h-10 w-10 rounded-xl transition shrink-0 flex items-center justify-center border border-slate-700">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button type="button" id="attachBtn" title="Прикрепить файл" class="btn-attach">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
             </svg>
           </button>
 
-          <textarea id="messageInput" rows="1" placeholder="Сообщение..."
-                    class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm leading-5 min-h-[40px] text-white focus:outline-none focus:border-blue-500 resize-none max-h-36 overflow-y-auto"></textarea>
-          
-          <button type="submit" id="sendBtn"
-                  class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium px-3.5 sm:px-5 h-10 rounded-xl transition shrink-0 flex items-center justify-center">
-            <span class="hidden sm:inline text-sm">Отправить</span>
-            <svg class="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <textarea id="messageInput" rows="1" placeholder="Сообщение..."></textarea>
+
+          <button type="submit" id="sendBtn" class="btn-send">
+            <span class="desktop-only">Отправить</span>
+            <svg class="mobile-only" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
             </svg>
           </button>
@@ -199,26 +424,26 @@
   </main>
 
   <!-- ПРАВАЯ ПАНЕЛЬ -->
-  <aside id="settingsPanel" class="fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-slate-900 border-l border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto transform translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 shrink-0">
-    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-      <h3 class="font-semibold text-sm text-slate-200">Параметры агента</h3>
-      <div class="flex items-center gap-3">
-        <button id="deleteAgentBtn" class="text-xs text-red-400 hover:text-red-300">Удалить</button>
-        <button id="closeRightBtn" class="lg:hidden text-slate-400 hover:text-white p-1 rounded bg-slate-800 text-xs">✕</button>
+  <aside id="settingsPanel" class="sidebar-right">
+    <div class="settings-head">
+      <span style="font-weight:600;font-size:14px;color:#e2e8f0;">Параметры агента</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="deleteAgentBtn" style="font-size:12px;color:#f87171;">Удалить</button>
+        <button id="closeRightBtn" class="btn-icon-close mobile-only">✕</button>
       </div>
     </div>
 
-    <div>
-      <label class="text-xs text-slate-400 block mb-1">Имя агента</label>
-      <input type="text" id="agentNameInput" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm" />
+    <div class="form-group">
+      <label class="form-label">Имя агента</label>
+      <input type="text" id="agentNameInput" class="input-field" />
     </div>
 
-    <div>
-      <div class="flex justify-between items-center mb-1">
-        <label class="text-xs text-slate-400">Модель Gemini</label>
-        <button id="refreshModelsBtn" type="button" class="text-[11px] text-blue-400 hover:underline">Обновить список</button>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label class="form-label">Модель Gemini</label>
+        <button id="refreshModelsBtn" type="button" style="font-size:11px;color:#60a5fa;">Обновить список</button>
       </div>
-      <select id="agentModelSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm">
+      <select id="agentModelSelect" class="input-field">
         <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
         <option value="gemini-3.8-flash">gemini-3.8-flash</option>
         <option value="gemini-2.5-flash">gemini-2.5-flash</option>
@@ -228,29 +453,29 @@
       </select>
     </div>
 
-    <div>
-      <label class="text-xs text-slate-400 block mb-1">Системная инструкция (Роль)</label>
+    <div class="form-group">
+      <label class="form-label">Системная инструкция (Роль)</label>
       <textarea id="agentSystemPrompt" rows="6" placeholder="Опишите роль, правила и формат ответов..."
-                class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs leading-relaxed"></textarea>
+                class="input-field" style="font-size:12px;line-height:1.5;resize:vertical;"></textarea>
     </div>
 
-    <div>
-      <div class="flex justify-between text-xs text-slate-400 mb-1">
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;">
         <span>Температура (креативность)</span>
         <span id="tempValue">0.7</span>
       </div>
-      <input type="range" id="agentTempInput" min="0" max="2" step="0.1" value="0.7" class="w-full accent-blue-500 h-2" />
+      <input type="range" id="agentTempInput" min="0" max="2" step="0.1" value="0.7" style="width:100%;accent-color:#3b82f6;" />
     </div>
 
-    <div class="flex items-center justify-between bg-slate-950 p-3 rounded-lg border border-slate-800">
-      <div class="pr-2">
-        <div class="text-xs font-medium text-slate-200">Поиск в Google (Grounding)</div>
-        <div class="text-[11px] text-slate-400">Может требовать платный биллинг API</div>
+    <div class="switch-box">
+      <div style="padding-right:8px;">
+        <div style="font-size:12px;font-weight:500;color:#e2e8f0;">Поиск в Google (Grounding)</div>
+        <div style="font-size:11px;color:#94a3b8;">Может требовать платный биллинг API</div>
       </div>
-      <input type="checkbox" id="agentSearchToggle" class="w-5 h-5 accent-blue-500 shrink-0" />
+      <input type="checkbox" id="agentSearchToggle" style="width:18px;height:18px;accent-color:#3b82f6;flex-shrink:0;" />
     </div>
 
-    <div class="text-[11px] text-slate-500 mt-auto pt-2">
+    <div style="font-size:11px;color:#64748b;margin-top:auto;padding-top:8px;">
       Поддерживаются фото, PDF, Excel (.xlsx) и текст. Любой ответ можно скопировать в буфер обмена кнопкой под сообщением.
     </div>
   </aside>
@@ -280,6 +505,9 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+
+    const bootEl = document.getElementById('bootFallback');
+    if (bootEl) bootEl.style.display = 'none';
 
     const defaultAgents = [
       {
@@ -313,7 +541,6 @@
       agents: defaultAgents
     };
 
-    // --- DOM ЭЛЕМЕНТЫ ---
     const authScreen = document.getElementById('authScreen');
     const authError = document.getElementById('authError');
     const syncStatus = document.getElementById('syncStatus');
@@ -332,7 +559,6 @@
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
 
-    // Элементы вложений
     const attachBtn = document.getElementById('attachBtn');
     const fileAttachInput = document.getElementById('fileAttachInput');
     const attachmentPreviewBar = document.getElementById('attachmentPreviewBar');
@@ -341,7 +567,15 @@
     const attachmentSize = document.getElementById('attachmentSize');
     const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
 
-    // --- ОБРАБОТКА ВЛОЖЕНИЙ (ФОТО, PDF, EXCEL, ТЕКСТ) ---
+    // Безопасный рендер Markdown (работает даже если marked.js ещё не загрузился)
+    function renderMarkdownSafe(text) {
+      if (typeof marked !== 'undefined' && marked.parse) {
+        return marked.parse(text);
+      }
+      return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    // --- ВЛОЖЕНИЯ ---
     attachBtn.addEventListener('click', () => fileAttachInput.click());
     removeAttachmentBtn.addEventListener('click', clearPendingAttachment);
 
@@ -349,7 +583,6 @@
       pendingAttachment = null;
       fileAttachInput.value = '';
       attachmentPreviewBar.classList.add('hidden');
-      attachmentPreviewBar.classList.remove('flex');
     }
 
     fileAttachInput.addEventListener('change', async (e) => {
@@ -366,18 +599,12 @@
       attachmentName.textContent = file.name;
       attachmentSize.textContent = `(${(file.size / 1024).toFixed(1)} КБ)`;
       attachmentPreviewBar.classList.remove('hidden');
-      attachmentPreviewBar.classList.add('flex');
 
       try {
         if (file.type.startsWith('image/') || file.type === 'application/pdf') {
           attachmentIcon.textContent = file.type.startsWith('image/') ? '🖼️' : '📄';
           const base64Data = await readFileAsBase64(file);
-          pendingAttachment = {
-            name: file.name,
-            kind: 'inline',
-            mimeType: file.type,
-            data: base64Data
-          };
+          pendingAttachment = { name: file.name, kind: 'inline', mimeType: file.type, data: base64Data };
         } else if (ext === 'xlsx' || ext === 'xls') {
           if (typeof XLSX === 'undefined') {
             alert('Библиотека Excel ещё загружается, попробуйте через пару секунд.');
@@ -392,19 +619,11 @@
             const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
             combinedText += `\n--- Лист: ${sheetName} ---\n${csv}\n`;
           });
-          pendingAttachment = {
-            name: file.name,
-            kind: 'text',
-            textContent: combinedText
-          };
+          pendingAttachment = { name: file.name, kind: 'text', textContent: combinedText };
         } else {
           attachmentIcon.textContent = '📝';
           const textContent = await file.text();
-          pendingAttachment = {
-            name: file.name,
-            kind: 'text',
-            textContent: textContent
-          };
+          pendingAttachment = { name: file.name, kind: 'text', textContent: textContent };
         }
       } catch (err) {
         alert('Не удалось прочитать файл: ' + err.message);
@@ -415,10 +634,7 @@
     function readFileAsBase64(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = reader.result.split(',')[1];
-          resolve(base64);
-        };
+        reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
@@ -432,9 +648,7 @@
           await navigator.clipboard.writeText(text);
           copied = true;
         }
-      } catch (err) {
-        console.warn('Clipboard API fallback:', err);
-      }
+      } catch (err) {}
 
       if (!copied) {
         const ta = document.createElement('textarea');
@@ -444,24 +658,20 @@
         document.body.appendChild(ta);
         ta.focus();
         ta.select();
-        try {
-          copied = document.execCommand('copy');
-        } catch (e) {
-          console.error('execCommand copy failed:', e);
-        }
+        try { copied = document.execCommand('copy'); } catch (e) {}
         document.body.removeChild(ta);
       }
 
       if (copied && buttonEl) {
         const originalText = buttonEl.textContent;
         buttonEl.textContent = '✓ Скопировано';
-        buttonEl.classList.add('text-emerald-400', 'border-emerald-500/50');
+        buttonEl.classList.add('copied');
         setTimeout(() => {
           buttonEl.textContent = originalText;
-          buttonEl.classList.remove('text-emerald-400', 'border-emerald-500/50');
+          buttonEl.classList.remove('copied');
         }, 1800);
       } else if (!copied) {
-        alert('Не удалось скопировать текст автоматически.');
+        alert('Не удалось скопировать текст.');
       }
     };
 
@@ -515,7 +725,7 @@
     async function initCloudSync(uid) {
       const userDocRef = doc(db, 'users', uid);
       syncStatus.textContent = '↻ Загрузка...';
-      syncStatus.className = 'text-[11px] text-amber-400';
+      syncStatus.className = 'sync-badge warn';
 
       const docSnap = await getDoc(userDocRef);
       if (!docSnap.exists()) {
@@ -530,7 +740,7 @@
           if (!state.activeAgentId) state.activeAgentId = state.agents[0].id;
           renderAll();
           syncStatus.textContent = '● Синхронизировано';
-          syncStatus.className = 'text-[11px] text-emerald-400';
+          syncStatus.className = 'sync-badge';
         }
       });
     }
@@ -538,7 +748,7 @@
     function saveState() {
       if (!currentUser) return;
       syncStatus.textContent = '↻ Сохранение...';
-      syncStatus.className = 'text-[11px] text-amber-400';
+      syncStatus.className = 'sync-badge warn';
 
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
@@ -546,11 +756,10 @@
           const userDocRef = doc(db, 'users', currentUser.uid);
           await setDoc(userDocRef, state);
           syncStatus.textContent = '● Синхронизировано';
-          syncStatus.className = 'text-[11px] text-emerald-400';
+          syncStatus.className = 'sync-badge';
         } catch (err) {
-          console.error('Ошибка записи в Firestore:', err);
           syncStatus.textContent = '✕ Ошибка облака';
-          syncStatus.className = 'text-[11px] text-red-400';
+          syncStatus.className = 'sync-badge err';
         }
       }, 400);
     }
@@ -565,23 +774,23 @@
     const mobileBackdrop = document.getElementById('mobileBackdrop');
 
     function closeDrawers() {
-      leftSidebar.classList.add('-translate-x-full');
-      settingsPanel.classList.add('translate-x-full');
+      leftSidebar.classList.remove('open');
+      settingsPanel.classList.remove('open');
       mobileBackdrop.classList.add('hidden');
     }
 
     function openLeftDrawer() {
       closeDrawers();
-      leftSidebar.classList.remove('-translate-x-full');
+      leftSidebar.classList.add('open');
       mobileBackdrop.classList.remove('hidden');
     }
 
     function openRightDrawer() {
       if (window.innerWidth >= 1024) {
-        settingsPanel.classList.toggle('lg:hidden');
+        settingsPanel.classList.toggle('desktop-hidden');
       } else {
         closeDrawers();
-        settingsPanel.classList.remove('translate-x-full');
+        settingsPanel.classList.add('open');
         mobileBackdrop.classList.remove('hidden');
       }
     }
@@ -606,12 +815,10 @@
       state.agents.forEach(agent => {
         const isActive = agent.id === state.activeAgentId;
         const btn = document.createElement('button');
-        btn.className = `text-left px-3 py-2.5 rounded-lg transition flex flex-col gap-0.5 ${
-          isActive ? 'bg-blue-600/20 border border-blue-500/50 text-white' : 'hover:bg-slate-800/70 text-slate-300 border border-transparent'
-        }`;
+        btn.className = 'agent-item' + (isActive ? ' active' : '');
         btn.innerHTML = `
-          <span class="font-medium text-sm truncate">${escapeHtml(agent.name)}</span>
-          <span class="text-[11px] text-slate-400 truncate">${agent.model} • Сообщений: ${agent.history.length}</span>
+          <span class="agent-item-name">${escapeHtml(agent.name)}</span>
+          <span class="agent-item-meta">${agent.model} • Сообщений: ${agent.history.length}</span>
         `;
         btn.onclick = () => {
           state.activeAgentId = agent.id;
@@ -652,9 +859,9 @@
       chatContainer.innerHTML = '';
       if (!agent.history || agent.history.length === 0) {
         chatContainer.innerHTML = `
-          <div class="m-auto text-center max-w-sm px-4 text-slate-500 text-xs sm:text-sm">
-            <p class="mb-1 text-slate-300 font-medium">Чат с агентом «${escapeHtml(agent.name)}»</p>
-            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать в буфер обмена.</p>
+          <div class="empty-state">
+            <strong>Чат с агентом «${escapeHtml(agent.name)}»</strong>
+            Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать в буфер обмена.
           </div>`;
         return;
       }
@@ -662,14 +869,10 @@
       agent.history.forEach((msg) => {
         const isUser = msg.role === 'user';
         const wrapper = document.createElement('div');
-        wrapper.className = `flex flex-col max-w-[92%] sm:max-w-3xl min-w-0 ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
+        wrapper.className = 'msg-wrapper ' + (isUser ? 'user' : 'model');
 
         const bubble = document.createElement('div');
-        bubble.className = `w-full max-w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-sm leading-relaxed break-words overflow-hidden ${
-          isUser 
-            ? 'bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap' 
-            : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-sm prose'
-        }`;
+        bubble.className = 'msg-bubble ' + (isUser ? 'user' : 'model prose');
 
         if (isUser) {
           bubble.textContent = msg.text;
@@ -679,18 +882,15 @@
             return `\n**${fname.trim()}**\n\`\`\`\n${fcontent.trim()}\n\`\`\`\n`;
           });
 
-          bubble.innerHTML = marked.parse(processedText);
-          if (typeof hljs !== 'undefined') {
-            bubble.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-          }
+          bubble.innerHTML = renderMarkdownSafe(processedText);
           wrapper.appendChild(bubble);
 
           const actionsRow = document.createElement('div');
-          actionsRow.className = 'flex flex-wrap items-center gap-2 mt-1.5 px-1';
+          actionsRow.className = 'msg-actions';
 
           const copyBtn = document.createElement('button');
           copyBtn.type = 'button';
-          copyBtn.className = 'text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 px-2.5 py-1 rounded-lg transition';
+          copyBtn.className = 'btn-copy';
           copyBtn.textContent = '📋 Скопировать';
           copyBtn.onclick = () => {
             const cleanText = bubble.innerText || msg.text;
@@ -709,10 +909,10 @@
 
     messageInput.addEventListener('input', function () {
       this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 144) + 'px';
+      this.style.height = Math.min(this.scrollHeight, 140) + 'px';
     });
 
-    // --- ЗАПРОС К GEMINI API ЧЕРЕЗ ПРОКСИ ---
+    // --- ЗАПРОС К GEMINI API ---
     async function sendMessageToGemini(userText) {
       if (!state.apiKey) {
         alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
@@ -736,10 +936,8 @@
       renderAgentsList();
 
       const loadingDiv = document.createElement('div');
-      loadingDiv.className = 'self-start bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2 rounded-2xl text-xs animate-pulse';
-      loadingDiv.textContent = attachment
-        ? `${agent.name} изучает файл «${attachment.name}»...`
-        : `${agent.name} печатает...`;
+      loadingDiv.className = 'msg-wrapper model';
+      loadingDiv.innerHTML = `<div class="msg-bubble model loading">${attachment ? `${escapeHtml(agent.name)} изучает файл «${escapeHtml(attachment.name)}»...` : `${escapeHtml(agent.name)} печатает...`}</div>`;
       chatContainer.appendChild(loadingDiv);
       chatContainer.scrollTop = chatContainer.scrollHeight;
       sendBtn.disabled = true;
@@ -756,46 +954,24 @@
         const currentParts = [];
         if (attachment) {
           if (attachment.kind === 'inline') {
-            currentParts.push({
-              inlineData: {
-                mimeType: attachment.mimeType,
-                data: attachment.data
-              }
-            });
+            currentParts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
           } else if (attachment.kind === 'text') {
-            currentParts.push({
-              text: `Содержимое прикрепленного файла "${attachment.name}":\n\n${attachment.textContent}`
-            });
+            currentParts.push({ text: `Содержимое прикрепленного файла "${attachment.name}":\n\n${attachment.textContent}` });
           }
         }
-        currentParts.push({
-          text: userText || 'Проанализируй прикрепленный файл и дай подробный ответ.'
-        });
+        currentParts.push({ text: userText || 'Проанализируй прикрепленный файл и дай подробный ответ.' });
 
-        contents.push({
-          role: 'user',
-          parts: currentParts
-        });
+        contents.push({ role: 'user', parts: currentParts });
 
-        const generationConfig = {
-          temperature: parseFloat(agent.temperature)
-        };
-
+        const generationConfig = { temperature: parseFloat(agent.temperature) };
         if (!agent.model.includes('lite') && agent.model.includes('gemini-3')) {
           generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
 
-        const requestBody = {
-          contents: contents,
-          generationConfig: generationConfig
-        };
-
+        const requestBody = { contents: contents, generationConfig: generationConfig };
         if ((agent.systemInstruction || '').trim()) {
-          requestBody.systemInstruction = {
-            parts: [{ text: agent.systemInstruction.trim() }]
-          };
+          requestBody.systemInstruction = { parts: [{ text: agent.systemInstruction.trim() }] };
         }
-
         if (agent.useSearch) {
           requestBody.tools = [{ google_search: {} }];
         }
@@ -815,37 +991,26 @@
             data = JSON.parse(rawText);
           } catch (e) {
             if ((response.status === 524 || response.status === 502 || response.status === 504) && attempt < maxRetries) {
-              loadingDiv.textContent = `${agent.name}: таймаут шлюза (${response.status}), повтор через 2 сек (${attempt + 1}/${maxRetries})...`;
+              loadingDiv.firstChild.textContent = `${agent.name}: таймаут шлюза (${response.status}), повтор через 2 сек (${attempt + 1}/${maxRetries})...`;
               await new Promise(resolve => setTimeout(resolve, retryDelayMs));
               continue;
             }
             throw new Error(`Сервер вернул некорректный ответ (${response.status}): ${rawText.slice(0, 100)}`);
           }
 
-          if (response.ok) {
-            break;
-          }
+          if (response.ok) break;
 
           const errMsg = data.error?.message || `HTTP Error ${response.status}`;
-          const isOverloaded =
-            response.status === 503 ||
-            response.status === 429 ||
-            /high demand|overloaded|try again later|unavailable/i.test(errMsg);
-
+          const isOverloaded = response.status === 503 || response.status === 429 || /high demand|overloaded|try again later|unavailable/i.test(errMsg);
           if (isOverloaded && attempt < maxRetries) {
-            loadingDiv.textContent = `${agent.name}: высокая нагрузка, повтор через 2 сек (попытка ${attempt + 1}/${maxRetries})...`;
+            loadingDiv.firstChild.textContent = `${agent.name}: высокая нагрузка, повтор через 2 сек (попытка ${attempt + 1}/${maxRetries})...`;
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             continue;
           }
-
           throw new Error(errMsg);
         }
 
-        const replyText = data.candidates?.[0]?.content?.parts
-          ?.map(p => p.text)
-          .filter(Boolean)
-          .join('\n') || 'Пустой ответ от модели.';
-
+        const replyText = data.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n') || 'Пустой ответ от модели.';
         agent.history.push({ role: 'model', text: replyText });
         saveState();
       } catch (err) {
@@ -860,10 +1025,7 @@
     }
 
     // --- СОБЫТИЯ ---
-    apiKeyInput.addEventListener('input', (e) => {
-      state.apiKey = e.target.value.trim();
-      saveState();
-    });
+    apiKeyInput.addEventListener('input', (e) => { state.apiKey = e.target.value.trim(); saveState(); });
 
     document.getElementById('addAgentBtn').addEventListener('click', () => {
       const newAgent = {
@@ -883,10 +1045,7 @@
     });
 
     document.getElementById('deleteAgentBtn').addEventListener('click', () => {
-      if (state.agents.length <= 1) {
-        alert('Нельзя удалить последнего агента.');
-        return;
-      }
+      if (state.agents.length <= 1) return alert('Нельзя удалить последнего агента.');
       if (!confirm('Удалить этого агента и всю его историю из облака?')) return;
       state.agents = state.agents.filter(a => a.id !== state.activeAgentId);
       state.activeAgentId = state.agents[0].id;
@@ -897,8 +1056,7 @@
 
     document.getElementById('clearChatBtn').addEventListener('click', () => {
       if (!confirm('Очистить переписку с этим агентом?')) return;
-      const agent = getActiveAgent();
-      agent.history = [];
+      getActiveAgent().history = [];
       saveState();
       renderAll();
     });
@@ -908,10 +1066,7 @@
       try {
         const res = await fetch(`${GEMINI_BASE_URL}/v1beta/models?key=${encodeURIComponent(state.apiKey)}`);
         const data = await res.json();
-        const models = (data.models || [])
-          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-          .map(m => m.name.replace('models/', ''));
-        
+        const models = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent')).map(m => m.name.replace('models/', ''));
         if (models.length === 0) return alert('Модели не найдены.');
         agentModelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
         if (models.includes(getActiveAgent().model)) {
@@ -934,29 +1089,10 @@
       currentAgentTitle.textContent = getActiveAgent().name;
     });
 
-    agentModelSelect.addEventListener('change', (e) => {
-      getActiveAgent().model = e.target.value;
-      saveState();
-      renderAll();
-    });
-
-    agentSystemPrompt.addEventListener('input', (e) => {
-      getActiveAgent().systemInstruction = e.target.value;
-      saveState();
-    });
-
-    agentTempInput.addEventListener('input', (e) => {
-      getActiveAgent().temperature = parseFloat(e.target.value);
-      tempValue.textContent = e.target.value;
-      saveState();
-      renderActiveAgent();
-    });
-
-    agentSearchToggle.addEventListener('change', (e) => {
-      getActiveAgent().useSearch = e.target.checked;
-      saveState();
-      renderActiveAgent();
-    });
+    agentModelSelect.addEventListener('change', (e) => { getActiveAgent().model = e.target.value; saveState(); renderAll(); });
+    agentSystemPrompt.addEventListener('input', (e) => { getActiveAgent().systemInstruction = e.target.value; saveState(); });
+    agentTempInput.addEventListener('input', (e) => { getActiveAgent().temperature = parseFloat(e.target.value); tempValue.textContent = e.target.value; saveState(); renderActiveAgent(); });
+    agentSearchToggle.addEventListener('change', (e) => { getActiveAgent().useSearch = e.target.checked; saveState(); renderActiveAgent(); });
 
     document.getElementById('chatForm').addEventListener('submit', (e) => {
       e.preventDefault();
