@@ -407,63 +407,42 @@
       });
     }
 
-    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (ANDROID WEBVIEW + DESKTOP) ---
+    // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ФАЙЛОВ (НАТИВНЫЙ CAPACITOR + БРАУЗЕР ПК) ---
     window.downloadGeneratedFile = async function(filename, content, mimeType = 'text/plain;charset=utf-8') {
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.Capacitor && window.Capacitor.isNativePlatform());
-
-      // 1. Для Android/Mobile используем системное меню "Поделиться"
-      if (isMobile && navigator.share) {
+      // 1. Нативное сохранение и отправка в Android APK через Capacitor Plugins
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share) {
         try {
-          const cleanMime = mimeType.split(';')[0];
-          const file = new File([content], filename, { type: cleanMime });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: filename
-            });
-            return;
-          }
+          const { Filesystem, Share } = window.Capacitor.Plugins;
+          const base64Data = btoa(unescape(encodeURIComponent(content)));
+
+          const saved = await Filesystem.writeFile({
+            path: filename,
+            data: base64Data,
+            directory: 'CACHE'
+          });
+
+          await Share.share({
+            title: filename,
+            url: saved.uri,
+            dialogTitle: 'Сохранить или отправить файл'
+          });
+          return;
         } catch (err) {
-          if (err.name === 'AbortError') return;
-          console.warn('File share failed, trying text/data fallback:', err);
-        }
-
-        // Если Android WebView не разрешил шаринг File-объекта, шарим как текст
-        if (!filename.endsWith('.doc')) {
-          try {
-            await navigator.share({
-              title: filename,
-              text: content
-            });
-            return;
-          } catch (err) {
-            if (err.name === 'AbortError') return;
-          }
+          if (err && String(err.message).toLowerCase().includes('cancel')) return;
+          alert('Ошибка сохранения файла: ' + (err.message || err));
         }
       }
 
-      // 2. Прямое скачивание через Data URL (работает в Android WebView надёжнее, чем blob:)
-      try {
-        const base64 = btoa(unescape(encodeURIComponent(content)));
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } catch (e) {
-        // 3. Резервный вариант через Blob для больших файлов на ПК
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }
+      // 2. Стандартное скачивание для браузера ПК
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
 
     window.downloadAsWordDoc = function(filename, markdownText) {
