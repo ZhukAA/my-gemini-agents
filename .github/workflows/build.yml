@@ -41,18 +41,22 @@ jobs:
           </head>
           <body>
             <div class="spinner"></div>
-            <div id="status">Подключение к Gemini Agents...</div>
+            <div id="status">Запуск Gemini Agents...</div>
             <script>
-              const REMOTE_PAGE = "https://zhukaa.github.io/my-gemini-agents/";
-              fetch(REMOTE_PAGE + "index.html?t=" + Date.now(), { cache: "no-store" })
-                .then(r => {
-                  if (!r.ok) throw new Error("HTTP " + r.status);
-                  window.location.replace(REMOTE_PAGE + "?v=" + Date.now());
-                })
-                .catch(err => {
-                  document.getElementById("status").textContent = "Запуск локальной версии (" + err.message + ")...";
-                  setTimeout(() => { window.location.replace("fallback.html"); }, 600);
-                });
+              const REMOTE_PAGE = "https://zhukaa.github.io/my-gemini-agents/?v=" + Date.now();
+              
+              // Если сети нет или сервер отвечает дольше 2.5 сек — открываем встроенную копию
+              const fallbackTimer = setTimeout(() => {
+                document.getElementById("status").textContent = "Запуск локальной версии...";
+                window.location.replace("fallback.html");
+              }, 2500);
+
+              if (navigator.onLine) {
+                window.location.replace(REMOTE_PAGE);
+              } else {
+                clearTimeout(fallbackTimer);
+                window.location.replace("fallback.html");
+              }
             </script>
           </body>
           </html>
@@ -74,7 +78,14 @@ jobs:
             cfg.backgroundColor = "#020617";
             cfg.server = {
               androidScheme: "https",
-              allowNavigation: ["*"]
+              allowNavigation: [
+                "zhukaa.github.io",
+                "*.github.io",
+                "*.firebaseapp.com",
+                "*.googleapis.com",
+                "*.gstatic.com",
+                "*.workers.dev"
+              ]
             };
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
           '
