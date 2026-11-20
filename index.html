@@ -25,6 +25,26 @@
     button { cursor: pointer; border: none; background: none; }
     .hidden { display: none !important; }
 
+    /* Тёмная полоса прокрутки в цвет интерфейса */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #334155 #020617;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #020617;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: #475569;
+    }
+
     /* Экран авторизации */
     #authScreen {
       position: fixed; inset: 0; z-index: 50;
