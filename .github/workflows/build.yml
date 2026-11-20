@@ -44,8 +44,6 @@ jobs:
             <div id="status">Запуск Gemini Agents...</div>
             <script>
               const REMOTE_PAGE = "https://zhukaa.github.io/my-gemini-agents/?v=" + Date.now();
-              
-              // Если сети нет или сервер отвечает дольше 2.5 сек — открываем встроенную копию
               const fallbackTimer = setTimeout(() => {
                 document.getElementById("status").textContent = "Запуск локальной версии...";
                 window.location.replace("fallback.html");
@@ -70,7 +68,7 @@ jobs:
           fi
 
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/assets @capacitor/filesystem @capacitor/share
           npx cap init "Gemini Agents" "com.zhukaa.geminiagents" --web-dir=www
           node -e '
             const fs = require("fs");
@@ -90,13 +88,14 @@ jobs:
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
           '
           npx cap add android
+          npx cap sync android
 
           if [ -f assets/icon.png ]; then
             npx capacitor-assets generate --android --iconBackgroundColor '#020617' --iconBackgroundColorDark '#020617'
           fi
 
           echo 'dependencies { implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22")) }' >> android/app/build.gradle
-          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
         run: |
