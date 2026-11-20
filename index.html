@@ -146,6 +146,7 @@
     <!-- НИЖНЯЯ ПАНЕЛЬ ВВОДА С ПРЕВЬЮ ВЛОЖЕНИЙ -->
     <div class="p-2.5 sm:p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
       <div class="max-w-4xl mx-auto flex flex-col gap-2">
+        <!-- Плашка прикрепленного файла -->
         <div id="attachmentPreviewBar" class="hidden items-center justify-between bg-slate-900 border border-blue-500/40 rounded-xl px-3 py-2 text-xs">
           <div class="flex items-center gap-2 min-w-0">
             <span id="attachmentIcon" class="text-base">📎</span>
@@ -249,17 +250,15 @@
       getFirestore, doc, getDoc, setDoc, onSnapshot 
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // ЗАМЕНИТЕ НА URL ВАШЕГО CLOUDFLARE WORKER:
-    const GEMINI_BASE_URL = "https://gemini-proxy.<ваш-поддомен>.workers.dev";
+    const GEMINI_BASE_URL = "https://gemini-proxy.zhuk2202.workers.dev";
 
-    // ЗАМЕНИТЕ НА КОНФИГУРАЦИЮ ВАШЕГО FIREBASE ПРОЕКТА:
     const firebaseConfig = {
-      apiKey: "ВАШ_FIREBASE_API_KEY",
-      authDomain: "ВАШ_ПРОЕКТ.firebaseapp.com",
-      projectId: "ВАШ_ПРОЕКТ",
-      storageBucket: "ВАШ_ПРОЕКТ.firebasestorage.app",
-      messagingSenderId: "ВАШ_SENDER_ID",
-      appId: "ВАШ_APP_ID"
+      apiKey: "AIzaSyA75YsySjxQaaeaj0THaz4jtsRJDvEWQt0",
+      authDomain: "my-gemini-agents-aecc5.firebaseapp.com",
+      projectId: "my-gemini-agents-aecc5",
+      storageBucket: "my-gemini-agents-aecc5.firebasestorage.app",
+      messagingSenderId: "845480515790",
+      appId: "1:845480515790:web:17b3e3611a2c6092e0989f"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -510,10 +509,6 @@
 
       const docSnap = await getDoc(userDocRef);
       if (!docSnap.exists()) {
-        const localSaved = localStorage.getItem('gemini_multi_agent_studio_v1');
-        if (localSaved) {
-          try { state = JSON.parse(localSaved); } catch (e) {}
-        }
         await setDoc(userDocRef, state);
       }
 
