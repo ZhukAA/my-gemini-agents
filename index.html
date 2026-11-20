@@ -13,14 +13,31 @@
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
+    html, body { width: 100%; max-width: 100vw; overflow-x: hidden; }
     .app-height { height: 100vh; height: 100dvh; }
-    .prose pre { background: #1e293b; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 0.85em; }
-    .prose code { font-family: monospace; font-size: 0.9em; word-break: break-word; }
+    .prose { max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; }
+    .prose pre {
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 0.85em;
+      max-width: 100%;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-x: hidden;
+    }
+    .prose code {
+      font-family: monospace;
+      font-size: 0.9em;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .prose p { margin-bottom: 0.6em; }
     .prose p:last-child { margin-bottom: 0; }
     .prose ul { list-style: disc; margin-left: 1.3em; margin-bottom: 0.6em; }
     .prose ol { list-style: decimal; margin-left: 1.3em; margin-bottom: 0.6em; }
-    .prose table { border-collapse: collapse; width: 100%; margin: 10px 0; display: block; overflow-x: auto; }
+    .prose table { border-collapse: collapse; width: 100%; margin: 10px 0; display: block; overflow-x: auto; max-width: 100%; }
     .prose th, .prose td { border: 1px solid #475569; padding: 6px 8px; text-align: left; }
     .prose th { background: #334155; }
   </style>
@@ -113,7 +130,7 @@
   </aside>
 
   <!-- ЦЕНТРАЛЬНАЯ ОБЛАСТЬ -->
-  <main class="flex-1 flex flex-col h-full min-w-0 bg-slate-950">
+  <main class="flex-1 flex flex-col h-full w-full max-w-full min-w-0 bg-slate-950 overflow-hidden">
     <header class="h-14 border-b border-slate-800 px-3 sm:px-5 flex items-center justify-between gap-2 bg-slate-900/70 shrink-0">
       <div class="flex items-center gap-2.5 min-w-0">
         <button id="openLeftBtn" class="lg:hidden p-2 -ml-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">
@@ -140,22 +157,22 @@
       </div>
     </header>
 
-    <div id="chatContainer" class="flex-1 overflow-y-auto px-3 py-4 sm:p-6 flex flex-col gap-3 sm:gap-4"></div>
+    <div id="chatContainer" class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:p-6 flex flex-col gap-3 sm:gap-4 w-full"></div>
 
     <!-- НИЖНЯЯ ПАНЕЛЬ ВВОДА С ПРЕВЬЮ ВЛОЖЕНИЙ -->
-    <div class="p-2.5 sm:p-4 border-t border-slate-800 bg-slate-900/60 shrink-0">
-      <div class="max-w-4xl mx-auto flex flex-col gap-2">
+    <div class="p-2.5 sm:p-4 border-t border-slate-800 bg-slate-900/60 shrink-0 w-full">
+      <div class="max-w-4xl mx-auto flex flex-col gap-2 w-full">
         <!-- Плашка прикрепленного файла -->
-        <div id="attachmentPreviewBar" class="hidden items-center justify-between bg-slate-900 border border-blue-500/40 rounded-xl px-3 py-2 text-xs">
+        <div id="attachmentPreviewBar" class="hidden items-center justify-between bg-slate-900 border border-blue-500/40 rounded-xl px-3 py-2 text-xs w-full">
           <div class="flex items-center gap-2 min-w-0">
-            <span id="attachmentIcon" class="text-base">📎</span>
+            <span id="attachmentIcon" class="text-base shrink-0">📎</span>
             <span id="attachmentName" class="text-slate-200 font-medium truncate">file.pdf</span>
             <span id="attachmentSize" class="text-slate-400 shrink-0"></span>
           </div>
-          <button type="button" id="removeAttachmentBtn" class="text-slate-400 hover:text-red-400 px-2 py-0.5 font-bold">✕</button>
+          <button type="button" id="removeAttachmentBtn" class="text-slate-400 hover:text-red-400 px-2 py-0.5 font-bold shrink-0">✕</button>
         </div>
 
-        <form id="chatForm" class="flex items-end gap-2">
+        <form id="chatForm" class="flex items-end gap-2 w-full">
           <input type="file" id="fileAttachInput" class="hidden"
                  accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.xlsx,.xls,.py,.js,.sql,.xml" />
           
@@ -166,8 +183,8 @@
             </svg>
           </button>
 
-          <textarea id="messageInput" rows="1" placeholder="Сообщение или вопрос по файлу..."
-                    class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 resize-none max-h-36 overflow-y-auto"></textarea>
+          <textarea id="messageInput" rows="1" placeholder="Сообщение..."
+                    class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm leading-5 min-h-[40px] text-white focus:outline-none focus:border-blue-500 resize-none max-h-36 overflow-y-auto"></textarea>
           
           <button type="submit" id="sendBtn"
                   class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium px-3.5 sm:px-5 h-10 rounded-xl transition shrink-0 flex items-center justify-center">
@@ -234,7 +251,7 @@
     </div>
 
     <div class="text-[11px] text-slate-500 mt-auto pt-2">
-      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Любой ответ можно скопировать в буфер обмена или отправить через системное меню «Поделиться».
+      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Любой ответ можно скопировать в буфер обмена кнопкой под сообщением.
     </div>
   </aside>
 
@@ -407,7 +424,7 @@
       });
     }
 
-    // --- КОПИРОВАНИЕ В БУФЕР ОБМЕНА И ОТПРАВКА ЧЕРЕЗ СИСТЕМНОЕ МЕНЮ ПОДЕЛИТЬСЯ ---
+    // --- КОПИРОВАНИЕ В БУФЕР ОБМЕНА ---
     window.copyTextToClipboard = async function(text, buttonEl) {
       let copied = false;
       try {
@@ -446,23 +463,6 @@
       } else if (!copied) {
         alert('Не удалось скопировать текст автоматически.');
       }
-    };
-
-    window.shareTextNative = async function(title, text, buttonEl) {
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: title || 'Gemini Agents',
-            text: text
-          });
-          return;
-        } catch (err) {
-          if (err && err.name === 'AbortError') return;
-          console.warn('Share failed, falling back to copy:', err);
-        }
-      }
-      // Если системное окно Поделиться недоступно (например, на ПК), копируем в буфер
-      await window.copyTextToClipboard(text, buttonEl);
     };
 
     // --- АВТОРИЗАЦИЯ ---
@@ -654,7 +654,7 @@
         chatContainer.innerHTML = `
           <div class="m-auto text-center max-w-sm px-4 text-slate-500 text-xs sm:text-sm">
             <p class="mb-1 text-slate-300 font-medium">Чат с агентом «${escapeHtml(agent.name)}»</p>
-            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать или отправить через «Поделиться».</p>
+            <p>Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать в буфер обмена.</p>
           </div>`;
         return;
       }
@@ -662,10 +662,10 @@
       agent.history.forEach((msg) => {
         const isUser = msg.role === 'user';
         const wrapper = document.createElement('div');
-        wrapper.className = `flex flex-col max-w-[90%] sm:max-w-3xl ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
+        wrapper.className = `flex flex-col max-w-[92%] sm:max-w-3xl min-w-0 ${isUser ? 'self-end items-end' : 'self-start items-start'}`;
 
         const bubble = document.createElement('div');
-        bubble.className = `px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-sm leading-relaxed break-words ${
+        bubble.className = `w-full max-w-full px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-sm leading-relaxed break-words overflow-hidden ${
           isUser 
             ? 'bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap' 
             : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-sm prose'
@@ -675,7 +675,6 @@
           bubble.textContent = msg.text;
           wrapper.appendChild(bubble);
         } else {
-          // Если модель оформила ответ в блок ```file:name ... ```, превращаем его в обычный читаемый блок кода
           const processedText = msg.text.replace(/```file:([^\n]+)\n([\s\S]*?)```/g, (match, fname, fcontent) => {
             return `\n**${fname.trim()}**\n\`\`\`\n${fcontent.trim()}\n\`\`\`\n`;
           });
@@ -698,16 +697,6 @@
             window.copyTextToClipboard(cleanText, copyBtn);
           };
           actionsRow.appendChild(copyBtn);
-
-          const shareBtn = document.createElement('button');
-          shareBtn.type = 'button';
-          shareBtn.className = 'text-[11px] bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition';
-          shareBtn.textContent = '📤 Поделиться';
-          shareBtn.onclick = () => {
-            const cleanText = bubble.innerText || msg.text;
-            window.shareTextNative(agent.name, cleanText, shareBtn);
-          };
-          actionsRow.appendChild(shareBtn);
 
           wrapper.appendChild(actionsRow);
         }
