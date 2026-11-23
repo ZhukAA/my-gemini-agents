@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
-  <title>Gemini Multi-Agent Studio (Cloud)</title>
-  <!-- Асинхронные вспомогательные библиотеки (не блокируют старт экрана) -->
-  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <title>Gemini Multi-Agent Rooms (Cloud)</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,27 +24,14 @@
     button { cursor: pointer; border: none; background: none; }
     .hidden { display: none !important; }
 
-    /* Тёмная полоса прокрутки в цвет интерфейса */
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: #334155 #020617;
-    }
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #020617;
-    }
-    ::-webkit-scrollbar-thumb {
-      background-color: #334155;
-      border-radius: 9999px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background-color: #475569;
-    }
+    /* Тёмная полоса прокрутки */
+    * { scrollbar-width: thin; scrollbar-color: #334155 #020617; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #020617; }
+    ::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #475569; }
 
-    /* Экран авторизации */
+    /* Авторизация */
     #authScreen {
       position: fixed; inset: 0; z-index: 50;
       background: #020617;
@@ -72,7 +58,6 @@
     .btn-primary {
       width: 100%; background: #2563eb; color: #fff;
       font-weight: 500; padding: 10px; border-radius: 8px; font-size: 14px;
-      transition: background 0.15s;
     }
     .btn-primary:hover { background: #3b82f6; }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -87,24 +72,21 @@
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #1e293b; }
     .error-text { font-size: 12px; color: #f87171; text-align: center; }
 
-    /* Затемнение для мобильных шторок */
-    #mobileBackdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 30;
-    }
+    /* Мобильные шторки */
+    #mobileBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 30; }
 
-    /* Боковые панели */
     .sidebar-left {
       position: fixed; top: 0; bottom: 0; left: 0; z-index: 40;
-      width: 280px; background: #0f172a; border-right: 1px solid #1e293b;
+      width: 290px; background: #0f172a; border-right: 1px solid #1e293b;
       display: flex; flex-direction: column; justify-content: space-between;
-      padding: 16px;
+      padding: 14px;
       transform: translateX(-100%); transition: transform 0.2s ease;
     }
     .sidebar-left.open { transform: translateX(0); }
 
     .sidebar-right {
       position: fixed; top: 0; bottom: 0; right: 0; z-index: 40;
-      width: 320px; max-width: 86vw; background: #0f172a; border-left: 1px solid #1e293b;
+      width: 330px; max-width: 88vw; background: #0f172a; border-left: 1px solid #1e293b;
       display: flex; flex-direction: column; gap: 14px;
       padding: 16px; overflow-y: auto;
       transform: translateX(100%); transition: transform 0.2s ease;
@@ -122,38 +104,52 @@
       .desktop-only { display: none !important; }
     }
 
-    /* Список агентов */
-    .sidebar-top { display: flex; flex-direction: column; gap: 12px; overflow: hidden; flex: 1; }
+    /* Левая панель: вкладки Чаты / Агенты */
+    .sidebar-top { display: flex; flex-direction: column; gap: 10px; overflow: hidden; flex: 1; }
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; }
-    .brand-title { font-size: 17px; font-weight: 700; color: #60a5fa; }
+    .brand-title { font-size: 16px; font-weight: 700; color: #60a5fa; }
     .sync-badge { font-size: 11px; color: #34d399; display: block; margin-top: 2px; }
     .sync-badge.warn { color: #fbbf24; }
     .sync-badge.err { color: #f87171; }
+    .btn-icon-close { background: #1e293b; color: #cbd5e1; padding: 6px 9px; border-radius: 8px; font-size: 12px; }
+
+    .nav-tabs {
+      display: flex; background: #020617; padding: 3px; border-radius: 10px; border: 1px solid #1e293b;
+    }
+    .nav-tab {
+      flex: 1; padding: 7px 8px; font-size: 12px; font-weight: 500;
+      border-radius: 7px; color: #94a3b8; transition: all 0.15s;
+    }
+    .nav-tab.active { background: #1e293b; color: #fff; }
+
+    .tab-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; color: #64748b; padding: 0 2px;
+    }
     .btn-sm-blue {
       background: #2563eb; color: #fff; font-size: 12px; font-weight: 500;
-      padding: 6px 10px; border-radius: 8px;
+      padding: 5px 10px; border-radius: 7px;
     }
-    .btn-icon-close {
-      background: #1e293b; color: #cbd5e1; padding: 6px 9px; border-radius: 8px; font-size: 12px;
-    }
-    #agentsList { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 4px; }
-    .agent-item {
-      text-align: left; padding: 10px 12px; border-radius: 8px;
+    .btn-sm-blue:hover { background: #3b82f6; }
+
+    .scroll-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-right: 4px; flex: 1; }
+    .list-item {
+      text-align: left; padding: 10px 12px; border-radius: 9px;
       border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px;
-      color: #cbd5e1;
+      color: #cbd5e1; background: rgba(2,6,23,0.4);
     }
-    .agent-item:hover { background: rgba(30,41,59,0.7); }
-    .agent-item.active { background: rgba(37,99,235,0.2); border-color: rgba(59,130,246,0.5); color: #fff; }
-    .agent-item-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .agent-item-meta { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item:hover { background: rgba(30,41,59,0.7); }
+    .list-item.active { background: rgba(37,99,235,0.2); border-color: rgba(59,130,246,0.5); color: #fff; }
+    .list-item-title { font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item-sub { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .sidebar-footer {
-      border-top: 1px solid #1e293b; padding-top: 12px;
-      display: flex; flex-direction: column; gap: 10px; font-size: 12px;
+      border-top: 1px solid #1e293b; padding-top: 10px;
+      display: flex; flex-direction: column; gap: 8px; font-size: 12px;
     }
     .footer-row { display: flex; gap: 8px; }
     .btn-footer {
-      flex: 1; background: #1e293b; color: #cbd5e1; padding: 8px;
+      flex: 1; background: #1e293b; color: #cbd5e1; padding: 7px;
       border-radius: 8px; text-align: center; font-size: 12px;
     }
     .btn-footer:hover { background: #334155; }
@@ -162,7 +158,7 @@
       padding-top: 6px; border-top: 1px solid rgba(30,41,59,0.8); color: #94a3b8;
     }
 
-    /* Основной экран чата */
+    /* Центральная область */
     .main-area {
       flex: 1; display: flex; flex-direction: column;
       height: 100%; width: 100%; max-width: 100%; min-width: 0;
@@ -171,7 +167,7 @@
     .chat-header {
       height: 56px; border-bottom: 1px solid #1e293b;
       padding: 0 14px; display: flex; align-items: center; justify-content: space-between;
-      gap: 8px; background: rgba(15,23,42,0.8); flex-shrink: 0;
+      gap: 8px; background: rgba(15,23,42,0.85); flex-shrink: 0;
     }
     .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .btn-menu {
@@ -179,8 +175,8 @@
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     .header-titles { min-width: 0; }
-    #currentAgentTitle { font-size: 15px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #currentAgentSubtitle { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #headerTitle { font-size: 15px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #headerSubtitle { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .btn-header {
       background: #1e293b; color: #e2e8f0; font-size: 12px;
@@ -188,24 +184,42 @@
     }
     .btn-header:hover { background: #334155; }
 
+    /* Редактор агента (когда выбрана вкладка Агенты) */
+    #agentEditorView {
+      flex: 1; overflow-y: auto; padding: 18px;
+      display: flex; flex-direction: column; gap: 14px;
+      max-width: 680px; width: 100%; margin: 0 auto;
+    }
+    .editor-card {
+      background: #0f172a; border: 1px solid #1e293b; border-radius: 14px;
+      padding: 18px; display: flex; flex-direction: column; gap: 14px;
+    }
+    .switch-box {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #020617; padding: 12px; border-radius: 8px; border: 1px solid #1e293b;
+    }
+
     /* Лента сообщений */
     #chatContainer {
       flex: 1; overflow-y: auto; overflow-x: hidden;
       padding: 14px; display: flex; flex-direction: column; gap: 12px; width: 100%;
     }
     .empty-state {
-      margin: auto; text-align: center; max-width: 340px; padding: 16px;
+      margin: auto; text-align: center; max-width: 380px; padding: 16px;
       color: #64748b; font-size: 13px; line-height: 1.5;
     }
-    .empty-state strong { color: #cbd5e1; display: block; margin-bottom: 4px; font-size: 14px; }
+    .empty-state strong { color: #cbd5e1; display: block; margin-bottom: 6px; font-size: 15px; }
 
-    .msg-wrapper {
-      display: flex; flex-direction: column;
-      max-width: 92%; min-width: 0;
-    }
+    .msg-wrapper { display: flex; flex-direction: column; max-width: 92%; min-width: 0; }
     @media (min-width: 768px) { .msg-wrapper { max-width: 760px; } }
     .msg-wrapper.user { align-self: flex-end; align-items: flex-end; }
     .msg-wrapper.model { align-self: flex-start; align-items: flex-start; }
+
+    .agent-sender-badge {
+      font-size: 11px; font-weight: 600; color: #60a5fa;
+      margin-bottom: 4px; padding: 0 4px; display: flex; align-items: center; gap: 6px;
+    }
+    .agent-sender-model { font-weight: 400; color: #64748b; font-size: 10px; }
 
     .msg-bubble {
       width: 100%; max-width: 100%;
@@ -223,42 +237,25 @@
     }
     .msg-bubble.loading { color: #94a3b8; font-size: 12px; }
 
-    /* Markdown и блоки кода с кнопкой копирования */
+    /* Блоки кода */
     .code-block-wrap {
-      position: relative;
-      margin: 8px 0;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      overflow: hidden;
-      max-width: 100%;
+      position: relative; margin: 8px 0; background: #1e293b;
+      border: 1px solid #334155; border-radius: 8px; overflow: hidden; max-width: 100%;
     }
     .code-block-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 5px 10px;
-      background: #0f172a;
-      border-bottom: 1px solid #334155;
-      font-size: 11px;
-      color: #94a3b8;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 10px; background: #0f172a; border-bottom: 1px solid #334155;
+      font-size: 11px; color: #94a3b8;
     }
     .btn-copy-code {
-      background: #1e293b;
-      color: #e2e8f0;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      padding: 2px 8px;
-      font-size: 11px;
-      transition: all 0.15s;
+      background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+      border-radius: 6px; padding: 2px 8px; font-size: 11px;
     }
-    .btn-copy-code:hover { background: #334155; }
     .btn-copy-code.copied { color: #34d399; border-color: rgba(16,185,129,0.6); }
 
     .prose pre {
-      background: #1e293b; padding: 10px;
-      margin: 0; font-size: 12.5px; max-width: 100%;
-      white-space: pre-wrap; word-break: break-word; overflow-x: hidden;
+      background: #1e293b; padding: 10px; margin: 0; font-size: 12.5px;
+      max-width: 100%; white-space: pre-wrap; word-break: break-word; overflow-x: hidden;
     }
     .prose code { font-family: monospace; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
     .prose p { margin-bottom: 8px; }
@@ -275,12 +272,27 @@
     }
     .btn-copy.copied { color: #34d399; border-color: rgba(16,185,129,0.5); }
 
-    /* Нижняя панель ввода */
+    /* Панель вызова приглашённых агентов и ввода сообщения */
     .input-area {
       padding: 10px 12px; border-top: 1px solid #1e293b;
-      background: rgba(15,23,42,0.75); flex-shrink: 0; width: 100%;
+      background: rgba(15,23,42,0.85); flex-shrink: 0; width: 100%;
     }
     .input-inner { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; width: 100%; }
+
+    .participants-bar {
+      display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 2px;
+    }
+    .chip-agent {
+      background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+      font-size: 11.5px; padding: 4px 10px; border-radius: 999px;
+      white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 4px;
+    }
+    .chip-agent:hover { border-color: #3b82f6; background: rgba(37,99,235,0.2); }
+    .chip-agent.all-round {
+      background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.45); color: #6ee7b7;
+    }
+    .chip-agent:disabled { opacity: 0.45; cursor: not-allowed; }
+
     .attach-bar {
       display: flex; align-items: center; justify-content: space-between;
       background: #0f172a; border: 1px solid rgba(59,130,246,0.4);
@@ -308,22 +320,34 @@
     }
     .btn-send:disabled { opacity: 0.5; }
 
-    /* Настройки правой панели */
+    /* Правая панель управления чатом и приглашениями */
     .settings-head {
       display: flex; align-items: center; justify-content: space-between;
       border-bottom: 1px solid #1e293b; padding-bottom: 10px;
     }
-    .switch-box {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #020617; padding: 12px; border-radius: 8px; border: 1px solid #1e293b;
+    .invite-list { display: flex; flex-direction: column; gap: 8px; }
+    .invite-card {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #020617; border: 1px solid #1e293b;
+      padding: 10px; border-radius: 10px; cursor: pointer;
+    }
+    .invite-card.invited { border-color: rgba(59,130,246,0.6); background: rgba(37,99,235,0.1); }
+    .invite-card input[type="checkbox"] {
+      width: 17px; height: 17px; margin-top: 2px; accent-color: #3b82f6; flex-shrink: 0;
+    }
+    .invite-info { min-width: 0; flex: 1; }
+    .invite-name { font-size: 13px; font-weight: 600; color: #f1f5f9; }
+    .invite-prompt {
+      font-size: 11px; color: #94a3b8; margin-top: 2px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
   </style>
 </head>
 <body>
 
-  <!-- ИНДИКАТОР ЗАГРУЗКИ (СКРЫВАЕТСЯ ПОСЛЕ СТАРТА FIREBASE) -->
+  <!-- ИНДИКАТОР ЗАГРУЗКИ -->
   <div id="bootFallback" style="position:fixed;inset:0;background:#020617;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:60;">
-    <div style="font-size:18px;color:#60a5fa;font-weight:700;margin-bottom:8px;">Gemini Agents</div>
+    <div style="font-size:18px;color:#60a5fa;font-weight:700;margin-bottom:8px;">Gemini Agent Rooms</div>
     <div id="bootMsg" style="font-size:13px;margin-bottom:16px;max-width:300px;line-height:1.4;">Подключение к облаку...</div>
     <button onclick="location.reload()" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:9px 18px;border-radius:10px;font-size:13px;">Обновить</button>
   </div>
@@ -351,8 +375,8 @@
   <div id="authScreen">
     <div class="auth-card">
       <div>
-        <div class="auth-title">Gemini Agents Cloud</div>
-        <div class="auth-sub">Войдите для синхронизации чатов, настроек и API-ключа</div>
+        <div class="auth-title">Gemini Agent Rooms</div>
+        <div class="auth-sub">Создавайте агентов и объединяйте их в общие чаты</div>
       </div>
 
       <form id="emailLoginForm" style="display:flex;flex-direction:column;gap:12px;">
@@ -376,20 +400,40 @@
 
   <div id="mobileBackdrop" class="hidden"></div>
 
-  <!-- ЛЕВАЯ ПАНЕЛЬ -->
+  <!-- ЛЕВАЯ ПАНЕЛЬ: ЧАТЫ И АГЕНТЫ -->
   <aside id="leftSidebar" class="sidebar-left">
     <div class="sidebar-top">
       <div class="sidebar-header">
         <div>
-          <div class="brand-title">Gemini Agents</div>
+          <div class="brand-title">Gemini Agent Rooms</div>
           <span id="syncStatus" class="sync-badge">● Облако подключено</span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <button id="addAgentBtn" class="btn-sm-blue">+ Новый</button>
-          <button id="closeLeftBtn" class="btn-icon-close mobile-only">✕</button>
-        </div>
+        <button id="closeLeftBtn" class="btn-icon-close mobile-only">✕</button>
       </div>
-      <div id="agentsList"></div>
+
+      <!-- Переключатель разделов -->
+      <div class="nav-tabs">
+        <button id="tabChatsBtn" class="nav-tab active" type="button">💬 Чаты</button>
+        <button id="tabAgentsBtn" class="nav-tab" type="button">🤖 Агенты</button>
+      </div>
+
+      <!-- Секция списка чатов -->
+      <div id="chatsSection" style="display:flex;flex-direction:column;gap:8px;flex:1;overflow:hidden;">
+        <div class="tab-header-row">
+          <span>ВАШИ КОМНАТЫ</span>
+          <button id="addChatBtn" class="btn-sm-blue" type="button">+ Новый чат</button>
+        </div>
+        <div id="chatsList" class="scroll-list"></div>
+      </div>
+
+      <!-- Секция списка агентов -->
+      <div id="agentsSection" class="hidden" style="display:flex;flex-direction:column;gap:8px;flex:1;overflow:hidden;">
+        <div class="tab-header-row">
+          <span>СПРАВОЧНИК АГЕНТОВ</span>
+          <button id="addAgentBtn" class="btn-sm-blue" type="button">+ Агент</button>
+        </div>
+        <div id="agentsList" class="scroll-list"></div>
+      </div>
     </div>
 
     <div class="sidebar-footer">
@@ -398,15 +442,15 @@
         <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="input-field" style="font-size:12px;padding:7px 10px;" />
       </div>
       <div class="footer-row">
-        <button id="exportBtn" class="btn-footer">📋 Копия JSON</button>
+        <button id="exportBtn" class="btn-footer" type="button">📋 Копия JSON</button>
         <label class="btn-footer" style="cursor:pointer;">
           Импорт
           <input type="file" id="importInput" accept=".json" class="hidden" />
         </label>
       </div>
       <div class="user-row">
-        <span id="userEmailLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:165px;"></span>
-        <button id="logoutBtn" style="color:#f87171;font-weight:500;">Выйти</button>
+        <span id="userEmailLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px;"></span>
+        <button id="logoutBtn" type="button" style="color:#f87171;font-weight:500;">Выйти</button>
       </div>
     </div>
   </aside>
@@ -415,123 +459,162 @@
   <main class="main-area">
     <header class="chat-header">
       <div class="header-left">
-        <button id="openLeftBtn" class="btn-menu mobile-only">
+        <button id="openLeftBtn" class="btn-menu mobile-only" type="button">
           <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
         <div class="header-titles">
-          <div id="currentAgentTitle">Агент</div>
-          <div id="currentAgentSubtitle">gemini-3.5-flash-lite</div>
+          <div id="headerTitle">Чат</div>
+          <div id="headerSubtitle">Участники</div>
         </div>
       </div>
 
-      <div class="header-actions">
-        <button id="clearChatBtn" class="btn-header">
+      <div class="header-actions" id="chatHeaderActions">
+        <button id="clearChatBtn" class="btn-header" type="button">
           <span class="desktop-only">Очистить</span>
           <span class="mobile-only">🗑️</span>
         </button>
-        <button id="toggleSettingsBtn" class="btn-header">
-          <span>⚙️</span>
-          <span class="desktop-only">Настройки</span>
+        <button id="toggleRoomPanelBtn" class="btn-header" type="button">
+          <span>👥</span>
+          <span class="desktop-only">Участники</span>
         </button>
       </div>
     </header>
 
-    <div id="chatContainer"></div>
+    <!-- ЭКРАН 1: ДИАЛОГ В ЧАТЕ -->
+    <div id="chatWorkspace" style="display:flex;flex-direction:column;flex:1;overflow:hidden;width:100%;">
+      <div id="chatContainer"></div>
 
-    <!-- ПАНЕЛЬ ВВОДА -->
-    <div class="input-area">
-      <div class="input-inner">
-        <div id="attachmentPreviewBar" class="attach-bar hidden">
-          <div class="attach-info">
-            <span id="attachmentIcon">📎</span>
-            <span id="attachmentName" class="attach-name">file.pdf</span>
-            <span id="attachmentSize" style="color:#94a3b8;flex-shrink:0;"></span>
+      <div class="input-area">
+        <div class="input-inner">
+          <!-- Панель быстрого вызова приглашённых агентов -->
+          <div id="participantsBar" class="participants-bar"></div>
+
+          <!-- Превью прикреплённого файла -->
+          <div id="attachmentPreviewBar" class="attach-bar hidden">
+            <div class="attach-info">
+              <span id="attachmentIcon">📎</span>
+              <span id="attachmentName" class="attach-name">file.pdf</span>
+              <span id="attachmentSize" style="color:#94a3b8;flex-shrink:0;"></span>
+            </div>
+            <button type="button" id="removeAttachmentBtn" style="color:#94a3b8;font-weight:700;padding:0 6px;">✕</button>
           </div>
-          <button type="button" id="removeAttachmentBtn" style="color:#94a3b8;font-weight:700;padding:0 6px;">✕</button>
+
+          <form id="chatForm" class="chat-form">
+            <input type="file" id="fileAttachInput" class="hidden"
+                   accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.htm,text/html,.xlsx,.xls,.py,.js,.sql,.xml" />
+            <button type="button" id="attachBtn" title="Прикрепить файл или HTML-страницу" class="btn-attach">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+              </svg>
+            </button>
+
+            <textarea id="messageInput" rows="1" placeholder="Сообщение (можно упомянуть @ИмяАгента)..."></textarea>
+
+            <button type="submit" id="sendBtn" class="btn-send">
+              <span class="desktop-only">Отправить</span>
+              <svg class="mobile-only" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ЭКРАН 2: РЕДАКТОР ВЫБРАННОГО АГЕНТА -->
+    <div id="agentEditorView" class="hidden">
+      <div class="editor-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:10px;">
+          <span style="font-weight:600;font-size:15px;color:#f1f5f9;">Настройка профиля агента</span>
+          <button id="deleteAgentBtn" type="button" style="font-size:12px;color:#f87171;">Удалить агента</button>
         </div>
 
-        <form id="chatForm" class="chat-form">
-          <input type="file" id="fileAttachInput" class="hidden"
-                 accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.htm,text/html,.xlsx,.xls,.py,.js,.sql,.xml" />
-          <button type="button" id="attachBtn" title="Прикрепить фото, HTML-сайт, PDF, Excel или текст" class="btn-attach">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-            </svg>
-          </button>
+        <div class="form-group">
+          <label class="form-label">Имя агента</label>
+          <input type="text" id="agentNameInput" class="input-field" placeholder="Например: Маркетолог" />
+        </div>
 
-          <textarea id="messageInput" rows="1" placeholder="Сообщение..."></textarea>
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <label class="form-label">Модель Gemini</label>
+            <button id="refreshModelsBtn" type="button" style="font-size:11px;color:#60a5fa;">Обновить список моделей</button>
+          </div>
+          <select id="agentModelSelect" class="input-field">
+            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+            <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
+            <option value="gemini-4-argon">gemini-4-argon</option>
+          </select>
+        </div>
 
-          <button type="submit" id="sendBtn" class="btn-send">
-            <span class="desktop-only">Отправить</span>
-            <svg class="mobile-only" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-          </button>
-        </form>
+        <div class="form-group">
+          <label class="form-label">Системный промпт (Роль и правила поведения)</label>
+          <textarea id="agentSystemPrompt" rows="8" placeholder="Опишите специализацию агента, стиль ответов и ограничения..."
+                    class="input-field" style="font-size:13px;line-height:1.5;resize:vertical;"></textarea>
+        </div>
+
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;">
+            <span>Температура (креативность)</span>
+            <span id="tempValue">0.7</span>
+          </div>
+          <input type="range" id="agentTempInput" min="0" max="2" step="0.1" value="0.7" style="width:100%;accent-color:#3b82f6;" />
+        </div>
+
+        <div class="switch-box">
+          <div style="padding-right:8px;">
+            <div style="font-size:13px;font-weight:500;color:#e2e8f0;">Поиск в Google (Grounding)</div>
+            <div style="font-size:11px;color:#94a3b8;">Позволяет агенту искать актуальные данные в сети</div>
+          </div>
+          <input type="checkbox" id="agentSearchToggle" style="width:18px;height:18px;accent-color:#3b82f6;flex-shrink:0;" />
+        </div>
+
+        <button id="backToChatsBtn" type="button" class="btn-primary" style="margin-top:4px;">Готово — вернуться в чаты</button>
       </div>
     </div>
   </main>
 
-  <!-- ПРАВАЯ ПАНЕЛЬ -->
-  <aside id="settingsPanel" class="sidebar-right">
+  <!-- ПРАВАЯ ПАНЕЛЬ: НАСТРОЙКИ КОМНАТЫ И ПРИГЛАШЕНИЕ АГЕНТОВ -->
+  <aside id="roomPanel" class="sidebar-right">
     <div class="settings-head">
-      <span style="font-weight:600;font-size:14px;color:#e2e8f0;">Параметры агента</span>
+      <span style="font-weight:600;font-size:14px;color:#e2e8f0;">Настройки чата</span>
       <div style="display:flex;align-items:center;gap:12px;">
-        <button id="deleteAgentBtn" style="font-size:12px;color:#f87171;">Удалить</button>
-        <button id="closeRightBtn" class="btn-icon-close mobile-only">✕</button>
+        <button id="deleteChatBtn" type="button" style="font-size:12px;color:#f87171;">Удалить чат</button>
+        <button id="closeRightBtn" class="btn-icon-close mobile-only" type="button">✕</button>
       </div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Имя агента</label>
-      <input type="text" id="agentNameInput" class="input-field" />
+      <label class="form-label">Название чата</label>
+      <input type="text" id="chatTitleInput" class="input-field" />
     </div>
 
     <div class="form-group">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <label class="form-label">Модель Gemini</label>
-        <button id="refreshModelsBtn" type="button" style="font-size:11px;color:#60a5fa;">Обновить список</button>
-      </div>
-      <select id="agentModelSelect" class="input-field">
-        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
-        <option value="gemini-3.8-flash">gemini-3.8-flash</option>
-        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-        <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-        <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
-        <option value="gemini-4-argon">gemini-4-argon</option>
+      <label class="form-label">Порядок ответа при отправке сообщения</label>
+      <select id="chatReplyModeSelect" class="input-field" style="font-size:13px;">
+        <option value="first">Отвечает первый (или упомянутый @Имя)</option>
+        <option value="all">Отвечают все приглашённые по очереди</option>
       </select>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Системная инструкция (Роль)</label>
-      <textarea id="agentSystemPrompt" rows="6" placeholder="Опишите роль, правила и формат ответов..."
-                class="input-field" style="font-size:12px;line-height:1.5;resize:vertical;"></textarea>
-    </div>
-
-    <div class="form-group">
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;">
-        <span>Температура (креативность)</span>
-        <span id="tempValue">0.7</span>
+    <div class="form-group" style="flex:1;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <label class="form-label">Приглашённые ИИ-агенты</label>
+        <button id="quickCreateAgentBtn" type="button" style="font-size:11px;color:#60a5fa;">+ Создать агента</button>
       </div>
-      <input type="range" id="agentTempInput" min="0" max="2" step="0.1" value="0.7" style="width:100%;accent-color:#3b82f6;" />
+      <div id="inviteAgentsList" class="invite-list"></div>
     </div>
 
-    <div class="switch-box">
-      <div style="padding-right:8px;">
-        <div style="font-size:12px;font-weight:500;color:#e2e8f0;">Поиск в Google (Grounding)</div>
-        <div style="font-size:11px;color:#94a3b8;">Может требовать платный биллинг API</div>
-      </div>
-      <input type="checkbox" id="agentSearchToggle" style="width:18px;height:18px;accent-color:#3b82f6;flex-shrink:0;" />
-    </div>
-
-    <div style="font-size:11px;color:#64748b;margin-top:auto;padding-top:8px;">
-      Поддерживаются фото, сохранённые сайты (.html), PDF, Excel (.xlsx) и текст. Код и ответы копируются в один клик.
+    <div style="font-size:11px;color:#64748b;padding-top:8px;border-top:1px solid #1e293b;line-height:1.4;">
+      Приглашённые агенты видят историю диалога (включая реплики других агентов) и отвечают строго в рамках своего системного промпта.
     </div>
   </aside>
 
-  <!-- ПОДКЛЮЧЕНИЕ FIREBASE SDK -->
+  <!-- FIREBASE SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { 
@@ -565,19 +648,35 @@
         id: 'agent-analyst',
         name: 'CRM-Аналитик',
         model: 'gemini-3.5-flash-lite',
-        systemInstruction: 'Ты - старший CRM и маркетинговый аналитик. Отвечай структурно, опирайся на цифры, когортный анализ, LTV и статистическую значимость. Избегай воды.',
+        systemInstruction: 'Ты - старший CRM и маркетинговый аналитик. Отвечай структурно, опирайся на цифры, когортный анализ, LTV и статистическую значимость. Если в чате участвуют другие агенты, оценивай их идеи с точки зрения окупаемости и метрик.',
         temperature: 0.2,
-        useSearch: false,
-        history: []
+        useSearch: false
       },
       {
         id: 'agent-copywriter',
         name: 'Email-Копирайтер',
         model: 'gemini-3.5-flash-lite',
-        systemInstruction: 'Ты - сильный коммерческий редактор и email-маркетолог. Пиши цепляющие темы писем, структурированный текст и сильные CTA.',
+        systemInstruction: 'Ты - сильный коммерческий редактор и email-маркетолог. Пиши цепляющие темы писем, структурированный текст и сильные CTA. Учитывай вводные аналитика и других участников чата.',
         temperature: 0.8,
-        useSearch: false,
-        history: []
+        useSearch: false
+      },
+      {
+        id: 'agent-critic',
+        name: 'Скептик-Критик',
+        model: 'gemini-3.5-flash-lite',
+        systemInstruction: 'Ты - продуктовый скептик. Ищи слабые места, риски, скрытые затраты и неочевидные ошибки в предложениях пользователя и других агентов. Предлагай конкретные улучшения.',
+        temperature: 0.5,
+        useSearch: false
+      }
+    ];
+
+    const defaultChats = [
+      {
+        id: 'chat-default-1',
+        title: 'Рабочий консилиум',
+        agentIds: ['agent-analyst', 'agent-copywriter'],
+        replyMode: 'all',
+        messages: []
       }
     ];
 
@@ -585,31 +684,52 @@
     let unsubscribeSnapshot = null;
     let saveTimeout = null;
     let pendingAttachment = null;
+    let isGenerating = false;
 
     let state = {
       apiKey: '',
-      activeAgentId: defaultAgents[0].id,
-      agents: defaultAgents
+      activeTab: 'chats', // 'chats' | 'agents'
+      activeChatId: defaultChats[0].id,
+      editingAgentId: defaultAgents[0].id,
+      agents: defaultAgents,
+      chats: defaultChats
     };
 
+    // DOM ссылки
     const authScreen = document.getElementById('authScreen');
     const authError = document.getElementById('authError');
     const syncStatus = document.getElementById('syncStatus');
     const userEmailLabel = document.getElementById('userEmailLabel');
-    const agentsListEl = document.getElementById('agentsList');
     const apiKeyInput = document.getElementById('apiKeyInput');
+
+    const tabChatsBtn = document.getElementById('tabChatsBtn');
+    const tabAgentsBtn = document.getElementById('tabAgentsBtn');
+    const chatsSection = document.getElementById('chatsSection');
+    const agentsSection = document.getElementById('agentsSection');
+    const chatsListEl = document.getElementById('chatsList');
+    const agentsListEl = document.getElementById('agentsList');
+
+    const headerTitle = document.getElementById('headerTitle');
+    const headerSubtitle = document.getElementById('headerSubtitle');
+    const chatHeaderActions = document.getElementById('chatHeaderActions');
+    const chatWorkspace = document.getElementById('chatWorkspace');
+    const agentEditorView = document.getElementById('agentEditorView');
     const chatContainer = document.getElementById('chatContainer');
-    const currentAgentTitle = document.getElementById('currentAgentTitle');
-    const currentAgentSubtitle = document.getElementById('currentAgentSubtitle');
+    const participantsBar = document.getElementById('participantsBar');
+
+    const chatTitleInput = document.getElementById('chatTitleInput');
+    const chatReplyModeSelect = document.getElementById('chatReplyModeSelect');
+    const inviteAgentsList = document.getElementById('inviteAgentsList');
+
     const agentNameInput = document.getElementById('agentNameInput');
     const agentModelSelect = document.getElementById('agentModelSelect');
     const agentSystemPrompt = document.getElementById('agentSystemPrompt');
     const agentTempInput = document.getElementById('agentTempInput');
     const tempValue = document.getElementById('tempValue');
     const agentSearchToggle = document.getElementById('agentSearchToggle');
+
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
-
     const attachBtn = document.getElementById('attachBtn');
     const fileAttachInput = document.getElementById('fileAttachInput');
     const attachmentPreviewBar = document.getElementById('attachmentPreviewBar');
@@ -618,19 +738,69 @@
     const attachmentSize = document.getElementById('attachmentSize');
     const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
 
+    // Миграция данных, если в облаке сохранилась старая структура без массива chats
+    function normalizeState(raw) {
+      const data = raw || {};
+      if (!Array.isArray(data.agents) || data.agents.length === 0) {
+        data.agents = JSON.parse(JSON.stringify(defaultAgents));
+      }
+      if (!Array.isArray(data.chats) || data.chats.length === 0) {
+        // Переносим старые истории агентов в отдельные чаты, если они были
+        const migratedChats = [];
+        data.agents.forEach(a => {
+          if (Array.isArray(a.history) && a.history.length > 0) {
+            migratedChats.push({
+              id: 'chat-' + a.id,
+              title: 'Чат: ' + a.name,
+              agentIds: [a.id],
+              replyMode: 'first',
+              messages: a.history.map(m => ({
+                role: m.role,
+                agentId: m.role === 'model' ? a.id : null,
+                agentName: m.role === 'model' ? a.name : null,
+                text: m.text
+              }))
+            });
+          }
+          delete a.history;
+        });
+        data.chats = migratedChats.length > 0 ? migratedChats : JSON.parse(JSON.stringify(defaultChats));
+      }
+      if (!data.activeChatId || !data.chats.some(c => c.id === data.activeChatId)) {
+        data.activeChatId = data.chats[0].id;
+      }
+      if (!data.editingAgentId || !data.agents.some(a => a.id === data.editingAgentId)) {
+        data.editingAgentId = data.agents[0].id;
+      }
+      if (!data.activeTab) data.activeTab = 'chats';
+      return data;
+    }
+
+    function getActiveChat() {
+      return state.chats.find(c => c.id === state.activeChatId) || state.chats[0];
+    }
+
+    function getEditingAgent() {
+      return state.agents.find(a => a.id === state.editingAgentId) || state.agents[0];
+    }
+
+    function getAgentById(id) {
+      return state.agents.find(a => a.id === id);
+    }
+
     // Безопасный рендер Markdown
     function renderMarkdownSafe(text) {
       if (typeof marked !== 'undefined' && marked.parse) {
         return marked.parse(text);
       }
-      return escapeHtml(text).replace(/\n/g, '<br>');
+      return escapeHtml(text)
+        .replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+        .replace(/\n/g, '<br>');
     }
 
-    // Очистка сохранённых HTML-страниц (удаляем громоздкие инлайн-скрипты и SVG, оставляя структуру и текст)
+    // Очистка HTML-документов
     function prepareHtmlDocument(rawHtml) {
-      if (rawHtml.length <= 120000) {
-        return rawHtml;
-      }
+      if (rawHtml.length <= 120000) return rawHtml;
       try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawHtml, 'text/html');
@@ -655,7 +825,6 @@
     fileAttachInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       if (file.size > 20 * 1024 * 1024) {
         alert('Файл слишком большой. Максимальный размер - 20 МБ.');
         clearPendingAttachment();
@@ -690,12 +859,7 @@
         } else if (ext === 'html' || ext === 'htm' || file.type === 'text/html') {
           attachmentIcon.textContent = '🌐';
           const rawHtml = await file.text();
-          const preparedHtml = prepareHtmlDocument(rawHtml);
-          pendingAttachment = {
-            name: file.name,
-            kind: 'text',
-            textContent: preparedHtml
-          };
+          pendingAttachment = { name: file.name, kind: 'text', textContent: prepareHtmlDocument(rawHtml) };
         } else {
           attachmentIcon.textContent = '📝';
           const textContent = await file.text();
@@ -716,7 +880,7 @@
       });
     }
 
-    // --- КОПИРОВАНИЕ В БУФЕР ОБМЕНА ---
+    // --- БУФЕР ОБМЕНА ---
     window.copyTextToClipboard = async function(text, buttonEl) {
       let copied = false;
       try {
@@ -797,7 +961,7 @@
       }
     });
 
-    // --- ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ FIRESTORE ---
+    // --- FIRESTORE ---
     async function initCloudSync(uid) {
       const userDocRef = doc(db, 'users', uid);
       syncStatus.textContent = '↻ Загрузка...';
@@ -811,9 +975,7 @@
       unsubscribeSnapshot = onSnapshot(userDocRef, (snapshot) => {
         if (snapshot.metadata.hasPendingWrites) return;
         if (snapshot.exists()) {
-          state = snapshot.data();
-          if (!state.agents || state.agents.length === 0) state.agents = defaultAgents;
-          if (!state.activeAgentId) state.activeAgentId = state.agents[0].id;
+          state = normalizeState(snapshot.data());
           renderAll();
           syncStatus.textContent = '● Синхронизировано';
           syncStatus.className = 'sync-badge';
@@ -840,18 +1002,14 @@
       }, 400);
     }
 
-    function getActiveAgent() {
-      return state.agents.find(a => a.id === state.activeAgentId) || state.agents[0];
-    }
-
-    // --- МОБИЛЬНЫЕ ШТОРКИ ---
+    // --- ШТОРКИ ---
     const leftSidebar = document.getElementById('leftSidebar');
-    const settingsPanel = document.getElementById('settingsPanel');
+    const roomPanel = document.getElementById('roomPanel');
     const mobileBackdrop = document.getElementById('mobileBackdrop');
 
     function closeDrawers() {
       leftSidebar.classList.remove('open');
-      settingsPanel.classList.remove('open');
+      roomPanel.classList.remove('open');
       mobileBackdrop.classList.add('hidden');
     }
 
@@ -863,42 +1021,97 @@
 
     function openRightDrawer() {
       if (window.innerWidth >= 1024) {
-        settingsPanel.classList.toggle('desktop-hidden');
+        roomPanel.classList.toggle('desktop-hidden');
       } else {
         closeDrawers();
-        settingsPanel.classList.add('open');
+        roomPanel.classList.add('open');
         mobileBackdrop.classList.remove('hidden');
       }
     }
 
     document.getElementById('openLeftBtn').addEventListener('click', openLeftDrawer);
     document.getElementById('closeLeftBtn').addEventListener('click', closeDrawers);
-    document.getElementById('toggleSettingsBtn').addEventListener('click', openRightDrawer);
+    document.getElementById('toggleRoomPanelBtn').addEventListener('click', openRightDrawer);
     document.getElementById('closeRightBtn').addEventListener('click', closeDrawers);
     mobileBackdrop.addEventListener('click', closeDrawers);
 
-    // --- РЕНДЕР ИНТЕРФЕЙСА ---
+    // --- ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК (ЧАТЫ / АГЕНТЫ) ---
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      renderAll();
+    }
+
+    tabChatsBtn.addEventListener('click', () => switchTab('chats'));
+    tabAgentsBtn.addEventListener('click', () => switchTab('agents'));
+    document.getElementById('backToChatsBtn').addEventListener('click', () => switchTab('chats'));
+
+    // --- РЕНДЕР ВСЕГО ИНТЕРФЕЙСА ---
     function renderAll() {
       if (document.activeElement !== apiKeyInput) {
         apiKeyInput.value = state.apiKey || '';
       }
-      renderAgentsList();
-      renderActiveAgent();
+
+      const isChatsMode = state.activeTab === 'chats';
+      tabChatsBtn.classList.toggle('active', isChatsMode);
+      tabAgentsBtn.classList.toggle('active', !isChatsMode);
+      chatsSection.classList.toggle('hidden', !isChatsMode);
+      agentsSection.classList.toggle('hidden', isChatsMode);
+
+      renderChatsList();
+      renderAgentsDirectory();
+
+      if (isChatsMode) {
+        chatWorkspace.classList.remove('hidden');
+        agentEditorView.classList.add('hidden');
+        chatHeaderActions.classList.remove('hidden');
+        if (window.innerWidth >= 1024) roomPanel.classList.remove('hidden');
+        renderActiveChat();
+      } else {
+        chatWorkspace.classList.add('hidden');
+        agentEditorView.classList.remove('hidden');
+        chatHeaderActions.classList.add('hidden');
+        roomPanel.classList.add('hidden');
+        renderAgentEditor();
+      }
     }
 
-    function renderAgentsList() {
-      agentsListEl.innerHTML = '';
-      state.agents.forEach(agent => {
-        const isActive = agent.id === state.activeAgentId;
+    function renderChatsList() {
+      chatsListEl.innerHTML = '';
+      state.chats.forEach(chat => {
+        const isActive = state.activeTab === 'chats' && chat.id === state.activeChatId;
+        const validAgents = (chat.agentIds || []).map(getAgentById).filter(Boolean);
+        const names = validAgents.length > 0 ? validAgents.map(a => a.name).join(', ') : 'Нет агентов';
+
         const btn = document.createElement('button');
-        btn.className = 'agent-item' + (isActive ? ' active' : '');
+        btn.className = 'list-item' + (isActive ? ' active' : '');
         btn.innerHTML = `
-          <span class="agent-item-name">${escapeHtml(agent.name)}</span>
-          <span class="agent-item-meta">${agent.model} • Сообщений: ${agent.history.length}</span>
+          <span class="list-item-title">${escapeHtml(chat.title)}</span>
+          <span class="list-item-sub">👥 ${escapeHtml(names)} • ${chat.messages.length} сообщ.</span>
         `;
         btn.onclick = () => {
-          state.activeAgentId = agent.id;
+          state.activeChatId = chat.id;
+          state.activeTab = 'chats';
           saveState();
+          renderAll();
+          closeDrawers();
+        };
+        chatsListEl.appendChild(btn);
+      });
+    }
+
+    function renderAgentsDirectory() {
+      agentsListEl.innerHTML = '';
+      state.agents.forEach(agent => {
+        const isActive = state.activeTab === 'agents' && agent.id === state.editingAgentId;
+        const btn = document.createElement('button');
+        btn.className = 'list-item' + (isActive ? ' active' : '');
+        btn.innerHTML = `
+          <span class="list-item-title">🤖 ${escapeHtml(agent.name)}</span>
+          <span class="list-item-sub">${agent.model} • T:${agent.temperature}</span>
+        `;
+        btn.onclick = () => {
+          state.editingAgentId = agent.id;
+          state.activeTab = 'agents';
           renderAll();
           closeDrawers();
         };
@@ -906,15 +1119,14 @@
       });
     }
 
-    function renderActiveAgent() {
-      const agent = getActiveAgent();
+    function renderAgentEditor() {
+      const agent = getEditingAgent();
       if (!agent) return;
 
-      currentAgentTitle.textContent = agent.name;
-      currentAgentSubtitle.textContent = `${agent.model} • T:${agent.temperature}${agent.useSearch ? ' • Search' : ''}`;
+      headerTitle.textContent = `Редактор: ${agent.name}`;
+      headerSubtitle.textContent = `${agent.model} • Настройка системного промпта`;
 
       if (document.activeElement !== agentNameInput) agentNameInput.value = agent.name;
-      
       if (!Array.from(agentModelSelect.options).some(opt => opt.value === agent.model)) {
         const opt = document.createElement('option');
         opt.value = agent.model;
@@ -922,16 +1134,95 @@
         agentModelSelect.appendChild(opt);
       }
       agentModelSelect.value = agent.model;
-
       if (document.activeElement !== agentSystemPrompt) agentSystemPrompt.value = agent.systemInstruction;
       agentTempInput.value = agent.temperature;
       tempValue.textContent = agent.temperature;
       agentSearchToggle.checked = !!agent.useSearch;
-
-      renderChatHistory(agent);
     }
 
-    // Оборачиваем каждый блок <pre> в контейнер с шапкой и кнопкой "Копировать код"
+    function renderActiveChat() {
+      const chat = getActiveChat();
+      if (!chat) return;
+
+      // Очищаем ссылки на удалённых агентов
+      chat.agentIds = (chat.agentIds || []).filter(id => state.agents.some(a => a.id === id));
+      const invitedAgents = chat.agentIds.map(getAgentById).filter(Boolean);
+
+      headerTitle.textContent = chat.title;
+      headerSubtitle.textContent = invitedAgents.length > 0
+        ? `В чате: ${invitedAgents.map(a => a.name).join(', ')}`
+        : 'Никто не приглашён — откройте «Участники»';
+
+      if (document.activeElement !== chatTitleInput) chatTitleInput.value = chat.title;
+      chatReplyModeSelect.value = chat.replyMode || 'first';
+
+      renderInviteChecklist(chat);
+      renderParticipantsBar(chat, invitedAgents);
+      renderChatMessages(chat);
+    }
+
+    function renderInviteChecklist(chat) {
+      inviteAgentsList.innerHTML = '';
+      state.agents.forEach(agent => {
+        const isInvited = chat.agentIds.includes(agent.id);
+        const label = document.createElement('label');
+        label.className = 'invite-card' + (isInvited ? ' invited' : '');
+        label.innerHTML = `
+          <input type="checkbox" ${isInvited ? 'checked' : ''} />
+          <div class="invite-info">
+            <div class="invite-name">${escapeHtml(agent.name)} <span style="font-weight:400;color:#64748b;font-size:11px;">(${agent.model})</span></div>
+            <div class="invite-prompt">${escapeHtml(agent.systemInstruction || 'Без промпта')}</div>
+          </div>
+        `;
+        const checkbox = label.querySelector('input');
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            if (!chat.agentIds.includes(agent.id)) chat.agentIds.push(agent.id);
+          } else {
+            chat.agentIds = chat.agentIds.filter(id => id !== agent.id);
+          }
+          saveState();
+          renderActiveChat();
+          renderChatsList();
+        });
+        inviteAgentsList.appendChild(label);
+      });
+    }
+
+    function renderParticipantsBar(chat, invitedAgents) {
+      participantsBar.innerHTML = '';
+      if (invitedAgents.length === 0) {
+        const warnBtn = document.createElement('button');
+        warnBtn.type = 'button';
+        warnBtn.className = 'chip-agent';
+        warnBtn.textContent = '+ Пригласить агентов в чат';
+        warnBtn.onclick = openRightDrawer;
+        participantsBar.appendChild(warnBtn);
+        return;
+      }
+
+      invitedAgents.forEach(agent => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip-agent';
+        chip.disabled = isGenerating;
+        chip.title = `Попросить ${agent.name} ответить в чат`;
+        chip.textContent = `💬 ${agent.name}`;
+        chip.onclick = () => triggerAgentReply(agent);
+        participantsBar.appendChild(chip);
+      });
+
+      if (invitedAgents.length > 1) {
+        const allChip = document.createElement('button');
+        allChip.type = 'button';
+        allChip.className = 'chip-agent all-round';
+        allChip.disabled = isGenerating;
+        allChip.textContent = '▶ Ответить всем по очереди';
+        allChip.onclick = () => triggerAllAgentsRound();
+        participantsBar.appendChild(allChip);
+      }
+    }
+
     function enhanceCodeBlocks(containerEl) {
       const preBlocks = containerEl.querySelectorAll('pre');
       preBlocks.forEach((pre) => {
@@ -968,21 +1259,35 @@
       });
     }
 
-    function renderChatHistory(agent) {
+    function renderChatMessages(chat) {
       chatContainer.innerHTML = '';
-      if (!agent.history || agent.history.length === 0) {
+      if (!chat.messages || chat.messages.length === 0) {
+        const invited = chat.agentIds.map(getAgentById).filter(Boolean);
+        const names = invited.length ? invited.map(a => `«${escapeHtml(a.name)}»`).join(', ') : 'пока никого';
         chatContainer.innerHTML = `
           <div class="empty-state">
-            <strong>Чат с агентом «${escapeHtml(agent.name)}»</strong>
-            Прикрепляйте фото, HTML-сайты, PDF или Excel через 📎. Любой блок кода или ответ можно скопировать в один клик.
+            <strong>Комната «${escapeHtml(chat.title)}»</strong>
+            В чате участвуют: ${names}.<br>
+            Напишите сообщение или нажмите на имя агента над полем ввода, чтобы передать ему слово.
           </div>`;
         return;
       }
 
-      agent.history.forEach((msg) => {
+      chat.messages.forEach((msg) => {
         const isUser = msg.role === 'user';
         const wrapper = document.createElement('div');
         wrapper.className = 'msg-wrapper ' + (isUser ? 'user' : 'model');
+
+        if (!isUser) {
+          const actualAgent = msg.agentId ? getAgentById(msg.agentId) : null;
+          const displayName = actualAgent ? actualAgent.name : (msg.agentName || 'Агент');
+          const displayModel = actualAgent ? actualAgent.model : '';
+
+          const senderTag = document.createElement('div');
+          senderTag.className = 'agent-sender-badge';
+          senderTag.innerHTML = `<span>🤖 ${escapeHtml(displayName)}</span>${displayModel ? `<span class="agent-sender-model">${escapeHtml(displayModel)}</span>` : ''}`;
+          wrapper.appendChild(senderTag);
+        }
 
         const bubble = document.createElement('div');
         bubble.className = 'msg-bubble ' + (isUser ? 'user' : 'model prose');
@@ -1005,10 +1310,8 @@
           const copyBtn = document.createElement('button');
           copyBtn.type = 'button';
           copyBtn.className = 'btn-copy';
-          copyBtn.textContent = '📋 Скопировать весь ответ';
-          copyBtn.onclick = () => {
-            window.copyTextToClipboard(msg.text, copyBtn);
-          };
+          copyBtn.textContent = '📋 Скопировать ответ';
+          copyBtn.onclick = () => window.copyTextToClipboard(msg.text, copyBtn);
           actionsRow.appendChild(copyBtn);
 
           wrapper.appendChild(actionsRow);
@@ -1025,66 +1328,105 @@
       this.style.height = Math.min(this.scrollHeight, 140) + 'px';
     });
 
-    // --- ЗАПРОС К GEMINI API ---
-    async function sendMessageToGemini(userText) {
-      if (!state.apiKey) {
-        alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
-        openLeftDrawer();
-        return;
+    // --- ЛОГИКА МНОГОАГЕНТНОГО ДИАЛОГА ---
+    function setGenerating(flag) {
+      isGenerating = flag;
+      sendBtn.disabled = flag;
+      const chat = getActiveChat();
+      if (chat) {
+        renderParticipantsBar(chat, chat.agentIds.map(getAgentById).filter(Boolean));
+      }
+    }
+
+    // Формирует историю для конкретного агента: его прошлые реплики идут как 'model',
+    // а реплики пользователя и других агентов — как 'user' с указанием автора
+    function buildContentsForAgent(chat, targetAgent, attachmentForLastMsg) {
+      const contents = [];
+      const msgs = chat.messages;
+
+      msgs.forEach((m, idx) => {
+        const isLast = idx === msgs.length - 1;
+        if (m.role === 'model' && m.agentId === targetAgent.id) {
+          contents.push({
+            role: 'model',
+            parts: [{ text: m.text }]
+          });
+        } else {
+          let authorPrefix = '';
+          if (m.role === 'model') {
+            const otherName = (m.agentId && getAgentById(m.agentId)?.name) || m.agentName || 'Другой агент';
+            authorPrefix = `[${otherName}]: `;
+          } else if (chat.agentIds.length > 1) {
+            authorPrefix = `[Пользователь]: `;
+          }
+
+          const parts = [];
+          if (isLast && attachmentForLastMsg) {
+            if (attachmentForLastMsg.kind === 'inline') {
+              parts.push({ inlineData: { mimeType: attachmentForLastMsg.mimeType, data: attachmentForLastMsg.data } });
+            } else if (attachmentForLastMsg.kind === 'text') {
+              parts.push({ text: `Содержимое прикрепленного документа "${attachmentForLastMsg.name}":\n\n${attachmentForLastMsg.textContent}` });
+            }
+          }
+          parts.push({ text: authorPrefix + (m.text || 'Проанализируй прикрепленный файл.') });
+
+          // Объединяем подряд идущие реплики с ролью 'user', чтобы не нарушать чередование ролей Gemini API
+          if (contents.length > 0 && contents[contents.length - 1].role === 'user' && !isLast) {
+            contents[contents.length - 1].parts.push({ text: '\n\n' + authorPrefix + m.text });
+          } else {
+            contents.push({ role: 'user', parts: parts });
+          }
+        }
+      });
+
+      // Если история пуста или последняя реплика принадлежит этому же агенту
+      if (contents.length === 0 || contents[contents.length - 1].role === 'model') {
+        contents.push({
+          role: 'user',
+          parts: [{ text: 'Продолжи обсуждение в рамках своей роли.' }]
+        });
       }
 
-      const agent = getActiveAgent();
-      const attachment = pendingAttachment;
-      clearPendingAttachment();
+      return contents;
+    }
 
-      let historyDisplayText = userText;
-      if (attachment) {
-        const badge = `📎 [${attachment.name}]`;
-        historyDisplayText = userText ? `${badge}\n${userText}` : badge;
-      }
-
-      agent.history.push({ role: 'user', text: historyDisplayText });
-      saveState();
-      renderChatHistory(agent);
-      renderAgentsList();
-
+    async function runSingleAgentTurn(chat, agent, attachment = null) {
       const loadingDiv = document.createElement('div');
       loadingDiv.className = 'msg-wrapper model';
-      loadingDiv.innerHTML = `<div class="msg-bubble model loading">${attachment ? `${escapeHtml(agent.name)} изучает файл «${escapeHtml(attachment.name)}»...` : `${escapeHtml(agent.name)} печатает...`}</div>`;
+      loadingDiv.innerHTML = `
+        <div class="agent-sender-badge"><span>🤖 ${escapeHtml(agent.name)}</span></div>
+        <div class="msg-bubble model loading">${attachment ? `Изучает файл «${escapeHtml(attachment.name)}»...` : `Формулирует ответ...`}</div>
+      `;
       chatContainer.appendChild(loadingDiv);
       chatContainer.scrollTop = chatContainer.scrollHeight;
-      sendBtn.disabled = true;
 
       const maxRetries = 3;
       const retryDelayMs = 2000;
 
       try {
-        const contents = agent.history.slice(0, -1).map(item => ({
-          role: item.role === 'user' ? 'user' : 'model',
-          parts: [{ text: item.text }]
-        }));
-
-        const currentParts = [];
-        if (attachment) {
-          if (attachment.kind === 'inline') {
-            currentParts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
-          } else if (attachment.kind === 'text') {
-            currentParts.push({ text: `Содержимое прикрепленного документа "${attachment.name}":\n\n${attachment.textContent}` });
-          }
-        }
-        currentParts.push({ text: userText || 'Проанализируй прикрепленный файл и дай подробный ответ.' });
-
-        contents.push({ role: 'user', parts: currentParts });
-
+        const contents = buildContentsForAgent(chat, agent, attachment);
         const generationConfig = { temperature: parseFloat(agent.temperature) };
         if (!agent.model.includes('lite') && agent.model.includes('gemini-3')) {
           generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
 
-        const requestBody = { contents: contents, generationConfig: generationConfig };
-        if ((agent.systemInstruction || '').trim()) {
-          requestBody.systemInstruction = { parts: [{ text: agent.systemInstruction.trim() }] };
+        const otherParticipants = chat.agentIds
+          .map(getAgentById)
+          .filter(a => a && a.id !== agent.id)
+          .map(a => a.name);
+
+        let groupContextNote = `\n\n[Контекст чата]: Твоё имя в этом чате — «${agent.name}».`;
+        if (otherParticipants.length > 0) {
+          groupContextNote += ` Вместе с тобой в чате участвуют: ${otherParticipants.join(', ')}. Не пиши своё имя в начале ответа, сразу отвечай по сути своей роли.`;
         }
+
+        const sysText = ((agent.systemInstruction || '').trim() + groupContextNote).trim();
+        const requestBody = {
+          contents: contents,
+          generationConfig: generationConfig,
+          systemInstruction: { parts: [{ text: sysText }] }
+        };
+
         if (agent.useSearch) {
           requestBody.tools = [{ google_search: {} }];
         }
@@ -1104,11 +1446,11 @@
             data = JSON.parse(rawText);
           } catch (e) {
             if ((response.status === 524 || response.status === 502 || response.status === 504) && attempt < maxRetries) {
-              loadingDiv.firstChild.textContent = `${agent.name}: таймаут шлюза (${response.status}), повтор через 2 сек (${attempt + 1}/${maxRetries})...`;
+              loadingDiv.lastElementChild.textContent = `Таймаут шлюза (${response.status}), повтор (${attempt + 1}/${maxRetries})...`;
               await new Promise(resolve => setTimeout(resolve, retryDelayMs));
               continue;
             }
-            throw new Error(`Сервер вернул некорректный ответ (${response.status}): ${rawText.slice(0, 100)}`);
+            throw new Error(`Сервер вернул некорректный ответ (${response.status})`);
           }
 
           if (response.ok) break;
@@ -1116,7 +1458,7 @@
           const errMsg = data.error?.message || `HTTP Error ${response.status}`;
           const isOverloaded = response.status === 503 || response.status === 429 || /high demand|overloaded|try again later|unavailable/i.test(errMsg);
           if (isOverloaded && attempt < maxRetries) {
-            loadingDiv.firstChild.textContent = `${agent.name}: высокая нагрузка, повтор через 2 сек (попытка ${attempt + 1}/${maxRetries})...`;
+            loadingDiv.lastElementChild.textContent = `Высокая нагрузка, повтор (${attempt + 1}/${maxRetries})...`;
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
             continue;
           }
@@ -1124,52 +1466,204 @@
         }
 
         const replyText = data.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('\n') || 'Пустой ответ от модели.';
-        agent.history.push({ role: 'model', text: replyText });
+        chat.messages.push({
+          role: 'model',
+          agentId: agent.id,
+          agentName: agent.name,
+          text: replyText
+        });
         saveState();
       } catch (err) {
-        agent.history.push({ role: 'model', text: `**Ошибка API:** ${err.message}` });
+        chat.messages.push({
+          role: 'model',
+          agentId: agent.id,
+          agentName: agent.name,
+          text: `**Ошибка API:** ${err.message}`
+        });
         saveState();
       } finally {
         loadingDiv.remove();
-        sendBtn.disabled = false;
-        renderChatHistory(agent);
-        renderAgentsList();
+        renderChatMessages(chat);
+        renderChatsList();
       }
     }
 
-    // --- СОБЫТИЯ ---
-    apiKeyInput.addEventListener('input', (e) => { state.apiKey = e.target.value.trim(); saveState(); });
+    async function handleUserSubmit(userText) {
+      if (!state.apiKey) {
+        alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
+        openLeftDrawer();
+        return;
+      }
 
-    document.getElementById('addAgentBtn').addEventListener('click', () => {
-      const newAgent = {
-        id: 'agent-' + Date.now(),
-        name: `Агент #${state.agents.length + 1}`,
-        model: 'gemini-3.5-flash-lite',
-        systemInstruction: 'Ты - полезный ИИ-ассистент.',
-        temperature: 0.7,
-        useSearch: false,
-        history: []
+      const chat = getActiveChat();
+      const invitedAgents = chat.agentIds.map(getAgentById).filter(Boolean);
+      if (invitedAgents.length === 0) {
+        alert('В этот чат не приглашён ни один агент. Добавьте агентов в панели «Участники».');
+        openRightDrawer();
+        return;
+      }
+
+      const attachment = pendingAttachment;
+      clearPendingAttachment();
+
+      let displayUserText = userText;
+      if (attachment) {
+        const badge = `📎 [${attachment.name}]`;
+        displayUserText = userText ? `${badge}\n${userText}` : badge;
+      }
+
+      chat.messages.push({ role: 'user', text: displayUserText });
+      saveState();
+      renderChatMessages(chat);
+      renderChatsList();
+
+      // Проверяем упоминание конкретного агента через @Имя
+      const mentioned = invitedAgents.find(a =>
+        userText.toLowerCase().includes('@' + a.name.toLowerCase())
+      );
+
+      let queue = [];
+      if (mentioned) {
+        queue = [mentioned];
+      } else if (chat.replyMode === 'all') {
+        queue = invitedAgents;
+      } else {
+        queue = [invitedAgents[0]];
+      }
+
+      setGenerating(true);
+      try {
+        for (let i = 0; i < queue.length; i++) {
+          await runSingleAgentTurn(chat, queue[i], i === 0 ? attachment : null);
+        }
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    async function triggerAgentReply(agent) {
+      if (isGenerating) return;
+      if (!state.apiKey) {
+        alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
+        openLeftDrawer();
+        return;
+      }
+      const chat = getActiveChat();
+      setGenerating(true);
+      try {
+        await runSingleAgentTurn(chat, agent, null);
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    async function triggerAllAgentsRound() {
+      if (isGenerating) return;
+      if (!state.apiKey) {
+        alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
+        openLeftDrawer();
+        return;
+      }
+      const chat = getActiveChat();
+      const invited = chat.agentIds.map(getAgentById).filter(Boolean);
+      setGenerating(true);
+      try {
+        for (const agent of invited) {
+          await runSingleAgentTurn(chat, agent, null);
+        }
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    // --- СОБЫТИЯ УПРАВЛЕНИЯ ЧАТАМИ И АГЕНТАМИ ---
+    apiKeyInput.addEventListener('input', (e) => {
+      state.apiKey = e.target.value.trim();
+      saveState();
+    });
+
+    document.getElementById('addChatBtn').addEventListener('click', () => {
+      const defaultInvited = state.agents.length > 0 ? [state.agents[0].id] : [];
+      const newChat = {
+        id: 'chat-' + Date.now(),
+        title: `Чат #${state.chats.length + 1}`,
+        agentIds: defaultInvited,
+        replyMode: 'first',
+        messages: []
       };
-      state.agents.push(newAgent);
-      state.activeAgentId = newAgent.id;
+      state.chats.unshift(newChat);
+      state.activeChatId = newChat.id;
+      state.activeTab = 'chats';
       saveState();
       renderAll();
       closeDrawers();
     });
 
-    document.getElementById('deleteAgentBtn').addEventListener('click', () => {
-      if (state.agents.length <= 1) return alert('Нельзя удалить последнего агента.');
-      if (!confirm('Удалить этого агента и всю его историю из облака?')) return;
-      state.agents = state.agents.filter(a => a.id !== state.activeAgentId);
-      state.activeAgentId = state.agents[0].id;
+    document.getElementById('deleteChatBtn').addEventListener('click', () => {
+      if (state.chats.length <= 1) return alert('Нельзя удалить последний чат.');
+      if (!confirm('Удалить этот чат и всю переписку в нём?')) return;
+      state.chats = state.chats.filter(c => c.id !== state.activeChatId);
+      state.activeChatId = state.chats[0].id;
       saveState();
       renderAll();
       closeDrawers();
     });
 
     document.getElementById('clearChatBtn').addEventListener('click', () => {
-      if (!confirm('Очистить переписку с этим агентом?')) return;
-      getActiveAgent().history = [];
+      if (!confirm('Очистить историю сообщений в этом чате?')) return;
+      getActiveChat().messages = [];
+      saveState();
+      renderAll();
+    });
+
+    chatTitleInput.addEventListener('input', (e) => {
+      const chat = getActiveChat();
+      chat.title = e.target.value || 'Без названия';
+      headerTitle.textContent = chat.title;
+      saveState();
+      renderChatsList();
+    });
+
+    chatReplyModeSelect.addEventListener('change', (e) => {
+      getActiveChat().replyMode = e.target.value;
+      saveState();
+    });
+
+    function createNewAgent(inviteToCurrentChat = false) {
+      const newAgent = {
+        id: 'agent-' + Date.now(),
+        name: `Агент #${state.agents.length + 1}`,
+        model: 'gemini-3.5-flash-lite',
+        systemInstruction: 'Ты - полезный ИИ-ассистент. Отвечай чётко и по делу.',
+        temperature: 0.7,
+        useSearch: false
+      };
+      state.agents.push(newAgent);
+      state.editingAgentId = newAgent.id;
+      if (inviteToCurrentChat) {
+        const chat = getActiveChat();
+        if (chat && !chat.agentIds.includes(newAgent.id)) {
+          chat.agentIds.push(newAgent.id);
+        }
+      }
+      state.activeTab = 'agents';
+      saveState();
+      renderAll();
+      closeDrawers();
+    }
+
+    document.getElementById('addAgentBtn').addEventListener('click', () => createNewAgent(false));
+    document.getElementById('quickCreateAgentBtn').addEventListener('click', () => createNewAgent(true));
+
+    document.getElementById('deleteAgentBtn').addEventListener('click', () => {
+      if (state.agents.length <= 1) return alert('Нельзя удалить последнего агента.');
+      if (!confirm('Удалить этого агента из справочника?')) return;
+      const delId = state.editingAgentId;
+      state.agents = state.agents.filter(a => a.id !== delId);
+      state.chats.forEach(c => {
+        c.agentIds = (c.agentIds || []).filter(id => id !== delId);
+      });
+      state.editingAgentId = state.agents[0].id;
       saveState();
       renderAll();
     });
@@ -1182,10 +1676,11 @@
         const models = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent')).map(m => m.name.replace('models/', ''));
         if (models.length === 0) return alert('Модели не найдены.');
         agentModelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
-        if (models.includes(getActiveAgent().model)) {
-          agentModelSelect.value = getActiveAgent().model;
+        const agent = getEditingAgent();
+        if (models.includes(agent.model)) {
+          agentModelSelect.value = agent.model;
         } else {
-          getActiveAgent().model = models[0];
+          agent.model = models[0];
           saveState();
           renderAll();
         }
@@ -1196,24 +1691,44 @@
     });
 
     agentNameInput.addEventListener('input', (e) => {
-      getActiveAgent().name = e.target.value || 'Без имени';
+      const agent = getEditingAgent();
+      agent.name = e.target.value || 'Без имени';
+      headerTitle.textContent = `Редактор: ${agent.name}`;
       saveState();
-      renderAgentsList();
-      currentAgentTitle.textContent = getActiveAgent().name;
+      renderAgentsDirectory();
+      renderChatsList();
     });
 
-    agentModelSelect.addEventListener('change', (e) => { getActiveAgent().model = e.target.value; saveState(); renderAll(); });
-    agentSystemPrompt.addEventListener('input', (e) => { getActiveAgent().systemInstruction = e.target.value; saveState(); });
-    agentTempInput.addEventListener('input', (e) => { getActiveAgent().temperature = parseFloat(e.target.value); tempValue.textContent = e.target.value; saveState(); renderActiveAgent(); });
-    agentSearchToggle.addEventListener('change', (e) => { getActiveAgent().useSearch = e.target.checked; saveState(); renderActiveAgent(); });
+    agentModelSelect.addEventListener('change', (e) => {
+      getEditingAgent().model = e.target.value;
+      saveState();
+      renderAll();
+    });
+
+    agentSystemPrompt.addEventListener('input', (e) => {
+      getEditingAgent().systemInstruction = e.target.value;
+      saveState();
+    });
+
+    agentTempInput.addEventListener('input', (e) => {
+      getEditingAgent().temperature = parseFloat(e.target.value);
+      tempValue.textContent = e.target.value;
+      saveState();
+    });
+
+    agentSearchToggle.addEventListener('change', (e) => {
+      getEditingAgent().useSearch = e.target.checked;
+      saveState();
+    });
 
     document.getElementById('chatForm').addEventListener('submit', (e) => {
       e.preventDefault();
+      if (isGenerating) return;
       const text = messageInput.value.trim();
       if (!text && !pendingAttachment) return;
       messageInput.value = '';
       messageInput.style.height = 'auto';
-      sendMessageToGemini(text);
+      handleUserSubmit(text);
     });
 
     messageInput.addEventListener('keydown', (e) => {
@@ -1234,15 +1749,15 @@
       const reader = new FileReader();
       reader.onload = (ev) => {
         try {
-          const imported = JSON.parse(ev.target.result);
-          if (Array.isArray(imported.agents) && imported.agents.length > 0) {
-            state.agents = imported.agents;
-            state.activeAgentId = imported.activeAgentId || imported.agents[0].id;
-            saveState();
-            renderAll();
-            closeDrawers();
-            alert('Агенты и история восстановлены и загружены в облако!');
-          }
+          const imported = normalizeState(JSON.parse(ev.target.result));
+          state.agents = imported.agents;
+          state.chats = imported.chats;
+          state.activeChatId = imported.activeChatId;
+          state.editingAgentId = imported.editingAgentId;
+          saveState();
+          renderAll();
+          closeDrawers();
+          alert('Чаты и агенты восстановлены и загружены в облако!');
         } catch (err) {
           alert('Ошибка чтения JSON файла.');
         }
@@ -1251,7 +1766,7 @@
     });
 
     function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     }
   </script>
 </body>
