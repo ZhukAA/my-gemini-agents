@@ -223,10 +223,41 @@
     }
     .msg-bubble.loading { color: #94a3b8; font-size: 12px; }
 
-    /* Markdown и блоки кода внутри ответа */
+    /* Markdown и блоки кода с кнопкой копирования */
+    .code-block-wrap {
+      position: relative;
+      margin: 8px 0;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .code-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 10px;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .btn-copy-code {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .btn-copy-code:hover { background: #334155; }
+    .btn-copy-code.copied { color: #34d399; border-color: rgba(16,185,129,0.6); }
+
     .prose pre {
-      background: #1e293b; padding: 10px; border-radius: 8px;
-      margin: 8px 0; font-size: 12.5px; max-width: 100%;
+      background: #1e293b; padding: 10px;
+      margin: 0; font-size: 12.5px; max-width: 100%;
       white-space: pre-wrap; word-break: break-word; overflow-x: hidden;
     }
     .prose code { font-family: monospace; font-size: 0.9em; white-space: pre-wrap; word-break: break-word; }
@@ -423,8 +454,8 @@
 
         <form id="chatForm" class="chat-form">
           <input type="file" id="fileAttachInput" class="hidden"
-                 accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.xlsx,.xls,.py,.js,.sql,.xml" />
-          <button type="button" id="attachBtn" title="Прикрепить файл" class="btn-attach">
+                 accept="image/*,.pdf,.txt,.csv,.json,.md,.html,.htm,text/html,.xlsx,.xls,.py,.js,.sql,.xml" />
+          <button type="button" id="attachBtn" title="Прикрепить фото, HTML-сайт, PDF, Excel или текст" class="btn-attach">
             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
             </svg>
@@ -496,7 +527,7 @@
     </div>
 
     <div style="font-size:11px;color:#64748b;margin-top:auto;padding-top:8px;">
-      Поддерживаются фото, PDF, Excel (.xlsx) и текст. Любой ответ можно скопировать в буфер обмена кнопкой под сообщением.
+      Поддерживаются фото, сохранённые сайты (.html), PDF, Excel (.xlsx) и текст. Код и ответы копируются в один клик.
     </div>
   </aside>
 
@@ -587,12 +618,28 @@
     const attachmentSize = document.getElementById('attachmentSize');
     const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
 
-    // Безопасный рендер Markdown (работает даже если marked.js ещё не загрузился)
+    // Безопасный рендер Markdown
     function renderMarkdownSafe(text) {
       if (typeof marked !== 'undefined' && marked.parse) {
         return marked.parse(text);
       }
       return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    // Очистка сохранённых HTML-страниц (удаляем громоздкие инлайн-скрипты и SVG, оставляя структуру и текст)
+    function prepareHtmlDocument(rawHtml) {
+      if (rawHtml.length <= 120000) {
+        return rawHtml;
+      }
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(rawHtml, 'text/html');
+        doc.querySelectorAll('script, style, svg, noscript, iframe, link[rel="stylesheet"]').forEach(el => el.remove());
+        const cleaned = doc.documentElement ? doc.documentElement.outerHTML : rawHtml;
+        return cleaned.slice(0, 250000);
+      } catch (e) {
+        return rawHtml.slice(0, 250000);
+      }
     }
 
     // --- ВЛОЖЕНИЯ ---
@@ -609,8 +656,8 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      if (file.size > 15 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер - 15 МБ.');
+      if (file.size > 20 * 1024 * 1024) {
+        alert('Файл слишком большой. Максимальный размер - 20 МБ.');
         clearPendingAttachment();
         return;
       }
@@ -640,6 +687,15 @@
             combinedText += `\n--- Лист: ${sheetName} ---\n${csv}\n`;
           });
           pendingAttachment = { name: file.name, kind: 'text', textContent: combinedText };
+        } else if (ext === 'html' || ext === 'htm' || file.type === 'text/html') {
+          attachmentIcon.textContent = '🌐';
+          const rawHtml = await file.text();
+          const preparedHtml = prepareHtmlDocument(rawHtml);
+          pendingAttachment = {
+            name: file.name,
+            kind: 'text',
+            textContent: preparedHtml
+          };
         } else {
           attachmentIcon.textContent = '📝';
           const textContent = await file.text();
@@ -875,13 +931,50 @@
       renderChatHistory(agent);
     }
 
+    // Оборачиваем каждый блок <pre> в контейнер с шапкой и кнопкой "Копировать код"
+    function enhanceCodeBlocks(containerEl) {
+      const preBlocks = containerEl.querySelectorAll('pre');
+      preBlocks.forEach((pre) => {
+        const codeEl = pre.querySelector('code');
+        const rawCode = codeEl ? codeEl.innerText : pre.innerText;
+
+        let langLabel = 'Код';
+        if (codeEl && codeEl.className) {
+          const match = codeEl.className.match(/language-([a-zA-Z0-9_-]+)/);
+          if (match) langLabel = match[1].toUpperCase();
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'code-block-wrap';
+
+        const header = document.createElement('div');
+        header.className = 'code-block-header';
+
+        const langSpan = document.createElement('span');
+        langSpan.textContent = langLabel;
+
+        const copyCodeBtn = document.createElement('button');
+        copyCodeBtn.type = 'button';
+        copyCodeBtn.className = 'btn-copy-code';
+        copyCodeBtn.textContent = '📋 Копировать код';
+        copyCodeBtn.onclick = () => window.copyTextToClipboard(rawCode, copyCodeBtn);
+
+        header.appendChild(langSpan);
+        header.appendChild(copyCodeBtn);
+
+        pre.parentNode.insertBefore(wrap, pre);
+        wrap.appendChild(header);
+        wrap.appendChild(pre);
+      });
+    }
+
     function renderChatHistory(agent) {
       chatContainer.innerHTML = '';
       if (!agent.history || agent.history.length === 0) {
         chatContainer.innerHTML = `
           <div class="empty-state">
             <strong>Чат с агентом «${escapeHtml(agent.name)}»</strong>
-            Прикрепляйте фото, PDF или Excel через 📎. Любой ответ можно скопировать в буфер обмена.
+            Прикрепляйте фото, HTML-сайты, PDF или Excel через 📎. Любой блок кода или ответ можно скопировать в один клик.
           </div>`;
         return;
       }
@@ -903,6 +996,7 @@
           });
 
           bubble.innerHTML = renderMarkdownSafe(processedText);
+          enhanceCodeBlocks(bubble);
           wrapper.appendChild(bubble);
 
           const actionsRow = document.createElement('div');
@@ -911,10 +1005,9 @@
           const copyBtn = document.createElement('button');
           copyBtn.type = 'button';
           copyBtn.className = 'btn-copy';
-          copyBtn.textContent = '📋 Скопировать';
+          copyBtn.textContent = '📋 Скопировать весь ответ';
           copyBtn.onclick = () => {
-            const cleanText = bubble.innerText || msg.text;
-            window.copyTextToClipboard(cleanText, copyBtn);
+            window.copyTextToClipboard(msg.text, copyBtn);
           };
           actionsRow.appendChild(copyBtn);
 
@@ -976,7 +1069,7 @@
           if (attachment.kind === 'inline') {
             currentParts.push({ inlineData: { mimeType: attachment.mimeType, data: attachment.data } });
           } else if (attachment.kind === 'text') {
-            currentParts.push({ text: `Содержимое прикрепленного файла "${attachment.name}":\n\n${attachment.textContent}` });
+            currentParts.push({ text: `Содержимое прикрепленного документа "${attachment.name}":\n\n${attachment.textContent}` });
           }
         }
         currentParts.push({ text: userText || 'Проанализируй прикрепленный файл и дай подробный ответ.' });
