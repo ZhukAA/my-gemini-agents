@@ -601,6 +601,12 @@
       </select>
     </div>
 
+    <div class="form-group">
+      <label class="form-label">Общий промпт комнаты (для всех агентов чата)</label>
+      <textarea id="chatSystemPromptInput" rows="4" placeholder="Общий контекст проекта, бренд, вводные и правила для всех участников этого чата..."
+                class="input-field" style="font-size:12px;line-height:1.45;resize:vertical;"></textarea>
+    </div>
+
     <div class="form-group" style="flex:1;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
         <label class="form-label">Приглашённые ИИ-агенты</label>
@@ -610,7 +616,7 @@
     </div>
 
     <div style="font-size:11px;color:#64748b;padding-top:8px;border-top:1px solid #1e293b;line-height:1.4;">
-      Приглашённые агенты видят историю диалога (включая реплики других агентов) и отвечают строго в рамках своего системного промпта.
+      Все приглашённые агенты следуют общему промпту комнаты и своей личной инструкции, видя реплики друг друга.
     </div>
   </aside>
 
@@ -676,6 +682,7 @@
         title: 'Рабочий консилиум',
         agentIds: ['agent-analyst', 'agent-copywriter'],
         replyMode: 'all',
+        systemPrompt: '',
         messages: []
       }
     ];
@@ -719,6 +726,7 @@
 
     const chatTitleInput = document.getElementById('chatTitleInput');
     const chatReplyModeSelect = document.getElementById('chatReplyModeSelect');
+    const chatSystemPromptInput = document.getElementById('chatSystemPromptInput');
     const inviteAgentsList = document.getElementById('inviteAgentsList');
 
     const agentNameInput = document.getElementById('agentNameInput');
@@ -752,6 +760,7 @@
               title: 'Чат: ' + a.name,
               agentIds: [a.id],
               replyMode: 'first',
+              systemPrompt: '',
               messages: a.history.map(m => ({
                 role: m.role,
                 agentId: m.role === 'model' ? a.id : null,
@@ -764,6 +773,9 @@
         });
         data.chats = migratedChats.length > 0 ? migratedChats : JSON.parse(JSON.stringify(defaultChats));
       }
+      data.chats.forEach(c => {
+        if (typeof c.systemPrompt !== 'string') c.systemPrompt = '';
+      });
       if (!data.activeChatId || !data.chats.some(c => c.id === data.activeChatId)) {
         data.activeChatId = data.chats[0].id;
       }
@@ -1077,11 +1089,12 @@
         const isActive = state.activeTab === 'chats' && chat.id === state.activeChatId;
         const validAgents = (chat.agentIds || []).map(getAgentById).filter(Boolean);
         const names = validAgents.length > 0 ? validAgents.map(a => a.name).join(', ') : 'Нет агентов';
+        const hasRoomPrompt = (chat.systemPrompt || '').trim().length > 0;
 
         const btn = document.createElement('button');
         btn.className = 'list-item' + (isActive ? ' active' : '');
         btn.innerHTML = `
-          <span class="list-item-title">${escapeHtml(chat.title)}</span>
+          <span class="list-item-title">${hasRoomPrompt ? '📌 ' : ''}${escapeHtml(chat.title)}</span>
           <span class="list-item-sub">👥 ${escapeHtml(names)} • ${chat.messages.length} сообщ.</span>
         `;
         btn.onclick = () => {
@@ -1142,14 +1155,18 @@
 
       chat.agentIds = (chat.agentIds || []).filter(id => state.agents.some(a => a.id === id));
       const invitedAgents = chat.agentIds.map(getAgentById).filter(Boolean);
+      const hasRoomPrompt = (chat.systemPrompt || '').trim().length > 0;
 
       headerTitle.textContent = chat.title;
       headerSubtitle.textContent = invitedAgents.length > 0
-        ? `В чате: ${invitedAgents.map(a => a.name).join(', ')}`
+        ? `В чате: ${invitedAgents.map(a => a.name).join(', ')}${hasRoomPrompt ? ' • 📌 Общий промпт' : ''}`
         : 'Никто не приглашён — откройте «Участники»';
 
       if (document.activeElement !== chatTitleInput) chatTitleInput.value = chat.title;
       chatReplyModeSelect.value = chat.replyMode || 'first';
+      if (document.activeElement !== chatSystemPromptInput) {
+        chatSystemPromptInput.value = chat.systemPrompt || '';
+      }
 
       renderInviteChecklist(chat);
       renderParticipantsBar(chat, invitedAgents);
@@ -1398,7 +1415,6 @@
         const contents = buildContentsForAgent(chat, agent, attachment);
         const generationConfig = { temperature: parseFloat(agent.temperature) };
 
-        // Отключаем длительное размышление для быстрых моделей, чтобы избежать таймаута 524 Cloudflare
         if (!agent.model.includes('lite') && (agent.model.includes('gemini-3') || agent.model.includes('2.5-flash'))) {
           generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
@@ -1408,16 +1424,28 @@
           .filter(a => a && a.id !== agent.id)
           .map(a => a.name);
 
-        let groupContextNote = `\n\n[Контекст чата]: Твоё имя в этом чате — «${agent.name}».`;
+        let groupContextNote = `[Контекст чата]: Твоё имя в этом чате — «${agent.name}».`;
         if (otherParticipants.length > 0) {
           groupContextNote += ` Вместе с тобой в чате участвуют: ${otherParticipants.join(', ')}. Не пиши своё имя в начале ответа, сразу отвечай по сути своей роли.`;
         }
 
-        const sysText = ((agent.systemInstruction || '').trim() + groupContextNote).trim();
+        // Объединяем общий промпт комнаты + личную роль агента + служебный контекст
+        const roomPrompt = (chat.systemPrompt || '').trim();
+        const agentPrompt = (agent.systemInstruction || '').trim();
+        const promptParts = [];
+
+        if (roomPrompt) {
+          promptParts.push(`[Общий контекст и правила этого чата]:\n${roomPrompt}`);
+        }
+        if (agentPrompt) {
+          promptParts.push(`[Твоя личная роль и инструкция]:\n${agentPrompt}`);
+        }
+        promptParts.push(groupContextNote);
+
         const requestBody = {
           contents: contents,
           generationConfig: generationConfig,
-          systemInstruction: { parts: [{ text: sysText }] }
+          systemInstruction: { parts: [{ text: promptParts.join('\n\n') }] }
         };
 
         if (agent.useSearch) {
@@ -1497,7 +1525,6 @@
       }
     }
 
-    // Если в поле ввода набран текст или прикреплён файл, публикуем их в ленту перед вызовом агента
     function flushPendingUserInput(chat) {
       const typedText = messageInput.value.trim();
       const attachment = pendingAttachment;
@@ -1622,6 +1649,7 @@
         title: `Чат #${state.chats.length + 1}`,
         agentIds: defaultInvited,
         replyMode: 'first',
+        systemPrompt: '',
         messages: []
       };
       state.chats.unshift(newChat);
@@ -1660,6 +1688,13 @@
     chatReplyModeSelect.addEventListener('change', (e) => {
       getActiveChat().replyMode = e.target.value;
       saveState();
+    });
+
+    chatSystemPromptInput.addEventListener('input', (e) => {
+      getActiveChat().systemPrompt = e.target.value;
+      saveState();
+      renderChatsList();
+      renderActiveChat();
     });
 
     function createNewAgent(inviteToCurrentChat = false) {
