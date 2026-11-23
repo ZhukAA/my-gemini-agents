@@ -688,7 +688,7 @@
 
     let state = {
       apiKey: '',
-      activeTab: 'chats', // 'chats' | 'agents'
+      activeTab: 'chats',
       activeChatId: defaultChats[0].id,
       editingAgentId: defaultAgents[0].id,
       agents: defaultAgents,
@@ -738,14 +738,12 @@
     const attachmentSize = document.getElementById('attachmentSize');
     const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
 
-    // Миграция данных, если в облаке сохранилась старая структура без массива chats
     function normalizeState(raw) {
       const data = raw || {};
       if (!Array.isArray(data.agents) || data.agents.length === 0) {
         data.agents = JSON.parse(JSON.stringify(defaultAgents));
       }
       if (!Array.isArray(data.chats) || data.chats.length === 0) {
-        // Переносим старые истории агентов в отдельные чаты, если они были
         const migratedChats = [];
         data.agents.forEach(a => {
           if (Array.isArray(a.history) && a.history.length > 0) {
@@ -788,7 +786,6 @@
       return state.agents.find(a => a.id === id);
     }
 
-    // Безопасный рендер Markdown
     function renderMarkdownSafe(text) {
       if (typeof marked !== 'undefined' && marked.parse) {
         return marked.parse(text);
@@ -798,7 +795,6 @@
         .replace(/\n/g, '<br>');
     }
 
-    // Очистка HTML-документов
     function prepareHtmlDocument(rawHtml) {
       if (rawHtml.length <= 120000) return rawHtml;
       try {
@@ -1144,7 +1140,6 @@
       const chat = getActiveChat();
       if (!chat) return;
 
-      // Очищаем ссылки на удалённых агентов
       chat.agentIds = (chat.agentIds || []).filter(id => state.agents.some(a => a.id === id));
       const invitedAgents = chat.agentIds.map(getAgentById).filter(Boolean);
 
@@ -1206,7 +1201,7 @@
         chip.type = 'button';
         chip.className = 'chip-agent';
         chip.disabled = isGenerating;
-        chip.title = `Попросить ${agent.name} ответить в чат`;
+        chip.title = `Отправить запрос агенту ${agent.name}`;
         chip.textContent = `💬 ${agent.name}`;
         chip.onclick = () => triggerAgentReply(agent);
         participantsBar.appendChild(chip);
@@ -1268,7 +1263,7 @@
           <div class="empty-state">
             <strong>Комната «${escapeHtml(chat.title)}»</strong>
             В чате участвуют: ${names}.<br>
-            Напишите сообщение или нажмите на имя агента над полем ввода, чтобы передать ему слово.
+            Напишите сообщение и нажмите «Отправить» или сразу кликните на плашку нужного агента над полем ввода.
           </div>`;
         return;
       }
@@ -1338,8 +1333,6 @@
       }
     }
 
-    // Формирует историю для конкретного агента: его прошлые реплики идут как 'model',
-    // а реплики пользователя и других агентов — как 'user' с указанием автора
     function buildContentsForAgent(chat, targetAgent, attachmentForLastMsg) {
       const contents = [];
       const msgs = chat.messages;
@@ -1370,7 +1363,6 @@
           }
           parts.push({ text: authorPrefix + (m.text || 'Проанализируй прикрепленный файл.') });
 
-          // Объединяем подряд идущие реплики с ролью 'user', чтобы не нарушать чередование ролей Gemini API
           if (contents.length > 0 && contents[contents.length - 1].role === 'user' && !isLast) {
             contents[contents.length - 1].parts.push({ text: '\n\n' + authorPrefix + m.text });
           } else {
@@ -1379,7 +1371,6 @@
         }
       });
 
-      // Если история пуста или последняя реплика принадлежит этому же агенту
       if (contents.length === 0 || contents[contents.length - 1].role === 'model') {
         contents.push({
           role: 'user',
@@ -1406,7 +1397,9 @@
       try {
         const contents = buildContentsForAgent(chat, agent, attachment);
         const generationConfig = { temperature: parseFloat(agent.temperature) };
-        if (!agent.model.includes('lite') && agent.model.includes('gemini-3')) {
+
+        // Отключаем длительное размышление для быстрых моделей, чтобы избежать таймаута 524 Cloudflare
+        if (!agent.model.includes('lite') && (agent.model.includes('gemini-3') || agent.model.includes('2.5-flash'))) {
           generationConfig.thinkingConfig = { thinkingBudget: 0 };
         }
 
@@ -1435,11 +1428,27 @@
         let data = null;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-          });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 65000);
+
+          let response;
+          try {
+            response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal
+            });
+          } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (attempt < maxRetries) {
+              loadingDiv.lastElementChild.textContent = `Долгий ответ сервера, повтор (${attempt + 1}/${maxRetries})...`;
+              await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+              continue;
+            }
+            throw new Error('Превышено время ожидания ответа от прокси.');
+          }
+          clearTimeout(timeoutId);
 
           const rawText = await response.text();
           try {
@@ -1450,7 +1459,7 @@
               await new Promise(resolve => setTimeout(resolve, retryDelayMs));
               continue;
             }
-            throw new Error(`Сервер вернул некорректный ответ (${response.status})`);
+            throw new Error(`Сервер вернул некорректный ответ (${response.status}). Попробуйте модель gemini-3.5-flash-lite.`);
           }
 
           if (response.ok) break;
@@ -1488,6 +1497,29 @@
       }
     }
 
+    // Если в поле ввода набран текст или прикреплён файл, публикуем их в ленту перед вызовом агента
+    function flushPendingUserInput(chat) {
+      const typedText = messageInput.value.trim();
+      const attachment = pendingAttachment;
+      if (!typedText && !attachment) return null;
+
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      clearPendingAttachment();
+
+      let displayUserText = typedText;
+      if (attachment) {
+        const badge = `📎 [${attachment.name}]`;
+        displayUserText = typedText ? `${badge}\n${typedText}` : badge;
+      }
+
+      chat.messages.push({ role: 'user', text: displayUserText });
+      saveState();
+      renderChatMessages(chat);
+      renderChatsList();
+      return attachment;
+    }
+
     async function handleUserSubmit(userText) {
       if (!state.apiKey) {
         alert('Сначала вставьте ваш Gemini API Key в боковом меню.');
@@ -1517,7 +1549,6 @@
       renderChatMessages(chat);
       renderChatsList();
 
-      // Проверяем упоминание конкретного агента через @Имя
       const mentioned = invitedAgents.find(a =>
         userText.toLowerCase().includes('@' + a.name.toLowerCase())
       );
@@ -1549,9 +1580,10 @@
         return;
       }
       const chat = getActiveChat();
+      const attachment = flushPendingUserInput(chat);
       setGenerating(true);
       try {
-        await runSingleAgentTurn(chat, agent, null);
+        await runSingleAgentTurn(chat, agent, attachment);
       } finally {
         setGenerating(false);
       }
@@ -1565,11 +1597,12 @@
         return;
       }
       const chat = getActiveChat();
+      const attachment = flushPendingUserInput(chat);
       const invited = chat.agentIds.map(getAgentById).filter(Boolean);
       setGenerating(true);
       try {
-        for (const agent of invited) {
-          await runSingleAgentTurn(chat, agent, null);
+        for (let i = 0; i < invited.length; i++) {
+          await runSingleAgentTurn(chat, invited[i], i === 0 ? attachment : null);
         }
       } finally {
         setGenerating(false);
